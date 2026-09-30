@@ -1,0 +1,11 @@
+usage: jaxpropka [-h] {prepare,predict,regress} ...
+
+positional arguments:
+  {prepare,predict,regress}
+    prepare             precompute structural constants with Biotite
+    predict             evaluate a saved cache
+    regress             compare the SAME exported native candidate structure
+                        against PROPKA
+
+options:
+  -h, --help            show this help message and exit

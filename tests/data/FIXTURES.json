@@ -1,0 +1,8 @@
+{
+  "origin": "Generated peptide geometry; NOT deposited protein structures or experimental data",
+  "method": "RDKit MolFromSequence, ETKDGv3 seed 1701, MMFF maxIters=500; hydrogens removed",
+  "sequence_per_chain": "ADKHE",
+  "near_chain_translation_angstrom": 12.240439143831942,
+  "far_chain_translation_angstrom": 100,
+  "purpose": "deterministic topology, cross-chain, and external-PROPKA integration checks"
+}

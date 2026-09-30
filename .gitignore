@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+build/
+dist/
+.reference/
+coverage.xml
+.coverage
+# Keep small delivery benchmark reports and fixtures under version control.

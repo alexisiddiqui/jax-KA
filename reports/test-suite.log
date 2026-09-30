@@ -1,0 +1,24 @@
+sssssssssssssss.ssssss.....................................              [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_biotite_integration.py:24: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:35: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:47: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:58: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:74: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:80: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:94: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:104: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:119: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:126: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:134: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:139: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:158: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:169: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_biotite_integration.py:185: real Biotite dependency unavailable; molecular path NOT validated
+SKIPPED [1] tests/test_external_reference.py:32: original PROPKA 3.0 checkout unavailable; legacy parity NOT validated
+SKIPPED [1] tests/test_external_reference.py:42: original PROPKA 3.0 checkout unavailable; legacy parity NOT validated
+SKIPPED [1] tests/test_external_reference.py:63: original PROPKA 3.0 checkout unavailable; legacy parity NOT validated
+SKIPPED [1] tests/test_external_reference.py:103: original PROPKA 3.0 checkout unavailable; legacy parity NOT validated
+SKIPPED [1] tests/test_external_reference.py:108: modern PROPKA unavailable; external regression NOT validated
+SKIPPED [1] tests/test_gpu.py:11: JAX GPU unavailable; GPU execution NOT validated
+38 passed, 21 skipped in 23.93s

@@ -1,0 +1,39 @@
+name: pinned-original-propka30
+on:
+  workflow_dispatch:
+    inputs:
+      legacy_commit:
+        description: Reviewed full 40-character commit of jensengroup/propka-3.0
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  legacy:
+    runs-on: ubuntu-latest
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      JAXPROPKA_REQUIRE_INTEGRATION: '1'
+      JAXPROPKA_REQUIRE_LEGACY: '1'
+      JAXPROPKA_LEGACY_ROOT: .reference/propka-3.0
+      JAXPROPKA_TEST_REPORT_DIR: reports/legacy
+      JAXPROPKA_LEGACY_COMMIT: ${{ inputs.legacy_commit }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e '.[test,reference]'
+      - name: Check explicit commit, then fetch reference
+        run: |
+          python -c 'import os,re; assert re.fullmatch(r"[0-9a-fA-F]{40}",os.environ["JAXPROPKA_LEGACY_COMMIT"]), "supply a full reviewed Git SHA"'
+          python scripts/fetch_legacy.py --ref "$JAXPROPKA_LEGACY_COMMIT"
+      - run: pytest -ra tests/test_external_reference.py -k original30 --junitxml=reports/legacy-pytest.xml
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original30-provenance-and-results
+          path: |
+            reports/
+            .reference/legacy-lock.json

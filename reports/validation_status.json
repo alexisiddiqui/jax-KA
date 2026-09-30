@@ -1,0 +1,116 @@
+{
+  "date": "2026-09-30",
+  "python": "3.13.5",
+  "packages": {
+    "jax": "0.9.0.1",
+    "jaxlib": "0.9.0.1",
+    "numpy": "2.3.5",
+    "scipy": "1.17.0",
+    "pytest": "9.0.2",
+    "biotite": null,
+    "propka": null
+  },
+  "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+  "tests": {
+    "total": 59,
+    "passed": 38,
+    "failed": 0,
+    "skipped": 21
+  },
+  "skips": [
+    {
+      "test": "tests.test_biotite_integration::test_multiple_chains_repeated_numbers_and_independent_termini",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_all_twenty_candidates_and_native_heavy_atoms",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_rigid_rotation_preserves_geometric_kernels",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_far_chains_equal_separate_single_chain_and_selection",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_near_chain_edges_are_present",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_mmcif_author_chain_and_insertion_ids_roundtrip",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_missing_internal_segment_does_not_silently_create_charge",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_pdb_ter_is_respected_even_when_chain_id_reused",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_missing_oxt_is_explicit_and_finite",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_missing_native_sidechain_requires_opt_in",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_unsupported_chemistry_is_not_silently_discarded",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_disulfide_requires_frozen_cysteines_and_suppresses_thiols",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_reference_export_renumbers_without_losing_original_identity",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_molecular_charge_curves_and_midpoints_have_finite_gradients",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_biotite_integration::test_reference_export_rejects_capped_terminal_mismatch",
+      "reason": "real Biotite dependency unavailable; molecular path NOT validated"
+    },
+    {
+      "test": "tests.test_external_reference::test_original30_distance_scaled_coulomb_primitive",
+      "reason": "original PROPKA 3.0 checkout unavailable; legacy parity NOT validated"
+    },
+    {
+      "test": "tests.test_external_reference::test_original30_radial_volume_and_chain_identity_primitive",
+      "reason": "original PROPKA 3.0 checkout unavailable; legacy parity NOT validated"
+    },
+    {
+      "test": "tests.test_external_reference::test_original30_hbond_distance_cosine_primitive",
+      "reason": "original PROPKA 3.0 checkout unavailable; legacy parity NOT validated"
+    },
+    {
+      "test": "tests.test_external_reference::test_live_original30_multichain_discrepancy_report",
+      "reason": "original PROPKA 3.0 checkout unavailable; legacy parity NOT validated"
+    },
+    {
+      "test": "tests.test_external_reference::test_live_modern_multichain_discrepancy_report",
+      "reason": "modern PROPKA unavailable; external regression NOT validated"
+    },
+    {
+      "test": "tests.test_gpu::test_gpu_float32_forward_reverse_and_midpoint",
+      "reason": "JAX GPU unavailable; GPU execution NOT validated"
+    }
+  ],
+  "biotite_molecular_integration": "not_run_dependency_unavailable",
+  "propka30_external_regression": "not_run_checkout_unavailable",
+  "modern_propka_external_regression": "not_run_dependency_unavailable",
+  "approved_external_propka_baseline_included": false,
+  "gpu_execution": "not_run_no_gpu",
+  "benchmark_scope": "synthetic numerical graphs on CPU; NOT molecular or PROPKA speedup measurements",
+  "scientific_status": "PROPKA-3.0-parameterized mean-field surrogate, not reference-faithful or experimentally calibrated",
+  "wheel_build": "completed; see wheel-build.log",
+  "ci_workflows": "configured_not_executed",
+  "wheel_smoke_test": "passed for synthetic CPU evaluation; molecular dependencies not exercised"
+}
