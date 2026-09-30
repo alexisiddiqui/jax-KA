@@ -41,7 +41,7 @@ Synthetic graphs demonstrate execution and give reproducible microbenchmark inpu
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python benchmarks/bench.py --synthetic-n 16 --repeats 10 --all-pka --output reports/benchmark_cpu_n16_all.json
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python benchmarks/bench.py --synthetic-n 64 --repeats 10 --output reports/benchmark_cpu_n64.json
 python benchmarks/bench.py --pdb protein.pdb --require-gpu --output reports/protein_gpu.json
-python benchmarks/compare.py protein.pdb --backend legacy30 --legacy-root .reference/propka-3.0 --output reports/reference_timing.json
+python benchmarks/compare.py protein.pdb --output reports/reference_timing.json
 ```
 
 The last two commands were not run here. The comparison script labels warmed JAX evaluation separately from the complete PROPKA subprocess, including its startup, parsing, computation and writing; it does not automatically present those unlike scopes as a speedup ratio.

@@ -9,11 +9,12 @@ description = "Frozen-structure, soft-sequence titration model with Biotite topo
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-dependencies = ["numpy>=1.26", "scipy>=1.11", "jax>=0.4.35,<0.10", "biotite>=1.4,<2"]
+dependencies = ["numpy>=1.26", "scipy>=1.11", "jax>=0.4.35,<0.12", "biotite>=1.4,<2"]
 
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-cov>=5"]
-reference = ["propka>=3.5,<4"]
+reference = ["propka==3.5.1"]
+mps = ["jax==0.11.1", "jaxlib==0.11.1", "jax-mps==0.11.0"]
 
 [project.scripts]
 jaxpropka = "jaxpropka.cli:main"
@@ -27,5 +28,5 @@ pythonpath = ["src"]
 markers = [
   "integration: requires Biotite and structure I/O",
   "reference: requires an installed external PROPKA implementation",
-  "gpu: requires a JAX GPU device",
+  "mps: requires the jax-mps backend on Apple Silicon",
 ]

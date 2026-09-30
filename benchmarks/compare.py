@@ -19,7 +19,7 @@ import time
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('structure');p.add_argument('--backend',choices=['legacy30','modern'],default='legacy30')
+    p.add_argument('structure');p.add_argument('--backend',choices=['modern','legacy30'],default='modern')
     p.add_argument('--legacy-root');p.add_argument('--expected-commit');p.add_argument('--sequence')
     p.add_argument('--repeats',type=int,default=10);p.add_argument('--reference-repeats',type=int,default=3)
     p.add_argument('--steps',type=int,default=128);p.add_argument('--output',default='reports/comparison.json')

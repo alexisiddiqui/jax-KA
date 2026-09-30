@@ -17,9 +17,10 @@ Inspected 2026-09-30. URLs here are source records, not a claim that a particula
 
 The original source headers identify upstream licensing separately; this repository does not bundle that code. The sparse kernels, fractional-state energy model, topology/candidate machinery, differentiation and tests in this repository are newly written. Shared numerical parameter values and primitive formulas are attributed above. The proposed mean-field coupling model is not described as original PROPKA behavior.
 
-## Modern PROPKA, explicitly separate
+## Pinned pip PROPKA reference
 
 - Repository/API entry point: https://github.com/jensengroup/propka and https://raw.githubusercontent.com/jensengroup/propka/master/propka/run.py
+- The `reference` extra pins distribution version 3.5.1 for reproducible development and CI runs.
 - Adapter uses `propka.run.single(..., write_pka=True)` and records the installed distribution version.
 - A modern reference run is never labeled PROPKA 3.0.
 

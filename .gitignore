@@ -1,7 +1,19 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.idea/
+.vscode/
+htmlcov/
+
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.venv-mps/
 *.egg-info/
 build/
 dist/
@@ -9,3 +21,5 @@ dist/
 coverage.xml
 .coverage
 # Keep small delivery benchmark reports and fixtures under version control.
+*.zip
+*.tar

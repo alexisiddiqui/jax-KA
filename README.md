@@ -2,7 +2,7 @@
 
 Frozen-structure, soft-sequence titration in JAX, with Biotite topology handling.
 
-**Scientific status:** this is a PROPKA-3.0/Nov30-parameterized **mean-field surrogate**, not a numerically faithful port of PROPKA's coupled determinant algorithm. The structural pipeline, differentiable outputs, reference adapters, tests, CLI and benchmarks are implemented. Molecular integration and external PROPKA accuracy **have not been validated in the delivery environment**: Biotite and PROPKA could not be installed there. The executed numerical tests and CPU benchmark reports are included separately. GPU execution is also unvalidated. See [validation status](docs/VALIDATION.md).
+**Scientific status:** this is a PROPKA-3.0/Nov30-parameterized **mean-field surrogate**, not a numerically faithful port of PROPKA's coupled determinant algorithm. The structural pipeline, differentiable outputs, reference adapters, tests, CLI and benchmarks are implemented. Biotite integration, pinned pip PROPKA primitives and the full reference path are exercised by the test suite. GPU execution remains unvalidated. See [validation status](docs/VALIDATION.md).
 
 The compiled readouts accept only `P[N,20]`. Geometry, candidate side chains, residue identities/keys, terminal masks, neighbor graphs and geometric kernels are prepared once outside JIT. An output selection never removes the other residues or chains from the physical environment.
 
@@ -15,9 +15,9 @@ python -m pip install -e '.[test,reference]'
 pytest -ra
 ```
 
-The `reference` extra installs **modern** PROPKA, named separately from the original 3.0 backend. Original PROPKA 3.0 is fetched explicitly as described below. For GPU use, install a JAX/JAXLIB build appropriate for the device first, then verify `jax.devices()` and run the GPU test. The package does not choose a CUDA version for the host.
+The `reference` extra installs the pinned PyPI release `propka==3.5.1`. This is the default external reference used by the CLI, tests and comparison benchmark. For GPU use, install a JAX/JAXLIB build appropriate for the device first, then verify `jax.devices()` and run the GPU test. The package does not choose a CUDA version for the host.
 
-The dependency ranges in `pyproject.toml` are compatibility targets, not a claim that every version combination was tested. The included reports record the exact executed environment.
+The core dependency ranges in `pyproject.toml` are compatibility targets, not a claim that every version combination was tested. PROPKA is pinned because its output is used as regression data. The included reports record the exact executed environment.
 
 ## API: charge, titration curves and pKa
 
@@ -162,26 +162,16 @@ All distances, distance cutoffs, angular factors and per-candidate atomistic con
 
 See [model equations and limitations](docs/MODEL.md) for the exact relaxation and cost model.
 
-## Original PROPKA 3.0 regression
+## PROPKA regression
 
-Use the original repository, not the modern PyPI package under a misleading version label:
+The standard reference path uses the PROPKA version installed by the `reference` extra:
 
 ```bash
-# Network access is required. First resolution records the exact commit.
-python scripts/fetch_legacy.py --ref master
-# For a reproducible evaluation, review/preserve .reference/legacy-lock.json,
-# or start with: --ref FULL_REVIEWED_COMMIT_SHA
-
 jaxpropka regress tests/data/two_chains.pdb \
-  --backend legacy30 --legacy-root .reference/propka-3.0 \
-  --steps 128 --output reports/legacy30.json
-
-# Optional independent comparison to current installed modern PROPKA:
-jaxpropka regress tests/data/two_chains.pdb \
-  --backend modern --steps 128 --output reports/modern.json
+  --steps 128 --output reports/propka.json
 ```
 
-The adapters export the **same frozen candidate coordinates** used by the model, run PROPKA out of process, and restore original chain/number/insertion identities through a bijection. Each PDB segment receives a distinct short chain code. The legacy bridge is limited to 62 segments and PDB atom/residue capacities; those are reference-export limits, not JAX multi-chain array limits.
+The adapter exports the **same frozen candidate coordinates** used by the model, runs PROPKA out of process, and restores original chain/number/insertion identities through a bijection. Each PDB segment receives a distinct short chain code. The PDB bridge is limited to 62 segments and PDB atom/residue capacities; those are reference-export limits, not JAX multi-chain array limits.
 
 Reports contain per-site midpoint discrepancies, pKa MAE/RMSE/max error, HH charge-curve discrepancies reconstructed from reference pKas, version/commit, input SHA256, structural-cache fingerprint and complete captured reference output. A categorical comparison requires a hard sequence. `--sequence ADKHE...` evaluates a mutant using the same frozen candidates. Missing required sites and invalid/nonconverged solves fail rather than disappearing from the statistics.
 
@@ -189,16 +179,16 @@ Record a regression baseline only after scientific review:
 
 ```bash
 jaxpropka regress tests/data/two_chains.pdb \
-  --backend legacy30 --legacy-root .reference/propka-3.0 --steps 128 \
-  --record-baseline tests/data/approved-legacy30.json
+  --steps 128 --record-baseline tests/data/approved-propka-3.5.1.json
 
 # Subsequent runs compare against that frozen, provenance-matched report.
 jaxpropka regress tests/data/two_chains.pdb \
-  --backend legacy30 --legacy-root .reference/propka-3.0 --steps 128 \
-  --baseline tests/data/approved-legacy30.json
+  --steps 128 --baseline tests/data/approved-propka-3.5.1.json
 ```
 
-Existing baselines are not overwritten. `--max-mae` adds an explicit scientific acceptance threshold; none is invented as a default. An approved external PROPKA baseline is **not included**, because the reference could not be run here. The included synthetic JSON snapshot is labeled implementation-only and must not be treated as PROPKA ground truth.
+Existing baselines are not overwritten. `--max-mae` adds an explicit scientific acceptance threshold; none is invented as a default. An approved external PROPKA baseline is **not included** because accepting one requires scientific review. The included synthetic JSON snapshot is labeled implementation-only and must not be treated as PROPKA ground truth.
+
+The `legacy30` backend remains available for an explicit historical comparison with the original source checkout. It is outside the standard development setup and is never selected by default.
 
 ## Tests, benchmarks and CLI
 
@@ -209,10 +199,8 @@ pytest -ra -m 'not integration and not reference and not gpu'
 # Full installation: fail, rather than silently skip, when dependencies are absent.
 JAXPROPKA_REQUIRE_INTEGRATION=1 JAXPROPKA_REQUIRE_REFERENCE=1 pytest -ra
 
-# Original reference primitive parity and full two-chain discrepancy report:
-JAXPROPKA_REQUIRE_LEGACY=1 \
-JAXPROPKA_LEGACY_ROOT=.reference/propka-3.0 \
-pytest -ra tests/test_external_reference.py -k original30
+# Pinned pip PROPKA integration and discrepancy report:
+pytest -ra tests/test_external_reference.py
 
 # GPU execution must actually find a GPU, not silently time a CPU fallback:
 python benchmarks/bench.py --cache structure-cache.npz --require-gpu
@@ -224,7 +212,6 @@ python benchmarks/bench.py --pdb protein.pdb --output reports/protein.json
 
 # Same-coordinate reference process timing, not a claim of algorithmic equivalence:
 python benchmarks/compare.py protein.pdb \
-  --backend legacy30 --legacy-root .reference/propka-3.0 \
   --output reports/comparison.json
 
 jaxpropka prepare tests/data/two_chains.pdb complex.npz

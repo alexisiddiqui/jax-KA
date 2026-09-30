@@ -24,7 +24,7 @@ def main(argv=None):
     pred.add_argument("--residues",help="comma-separated ZERO-based output indices; environment remains complete")
     pred.add_argument("--output",default="prediction.npz")
     reg=sub.add_parser("regress",help="compare the SAME exported native candidate structure against PROPKA")
-    reg.add_argument("structure");reg.add_argument("--backend",choices=["legacy30","modern"],default="legacy30")
+    reg.add_argument("structure");reg.add_argument("--backend",choices=["modern","legacy30"],default="modern")
     reg.add_argument("--sequence",help="hard mutant in cache residue order; exported from the same frozen candidates")
     reg.add_argument("--legacy-root");reg.add_argument("--expected-commit")
     reg.add_argument("--output",default="reports/reference.json")

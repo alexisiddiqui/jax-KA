@@ -1,7 +1,7 @@
-"""Explicit external PROPKA adapters and discrepancy/regression reporting.
+"""External PROPKA adapters and discrepancy/regression reporting.
 
-The legacy30 backend runs the original PROPKA 3.0 checkout, not the modern PyPI
-package relabeled as 3.0. The modern backend is named and versioned separately.
+The default backend uses the pinned PyPI package installed by the ``reference``
+extra. An explicit legacy30 backend remains available for historical comparisons.
 No subprocess or Python reference code is ever called from a JAX trace.
 """
 from __future__ import annotations
@@ -121,7 +121,7 @@ def parse_pka(text, mapping=None):
     return tuple(sites)
 
 
-def run_reference(path, *, backend="legacy30", legacy_root=None, mapping=None,
+def run_reference(path, *, backend="modern", legacy_root=None, mapping=None,
                   timeout=300, expected_commit=None):
     path=Path(path).resolve()
     provenance={"backend":backend,"input_sha256":hashlib.sha256(path.read_bytes()).hexdigest()}
