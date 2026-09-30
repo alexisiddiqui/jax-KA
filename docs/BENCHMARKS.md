@@ -40,7 +40,7 @@ Synthetic graphs demonstrate execution and give reproducible microbenchmark inpu
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python benchmarks/bench.py --synthetic-n 16 --repeats 10 --all-pka --output reports/benchmark_cpu_n16_all.json
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python benchmarks/bench.py --synthetic-n 64 --repeats 10 --output reports/benchmark_cpu_n64.json
-python benchmarks/bench.py --pdb protein.pdb --require-gpu --output reports/protein_gpu.json
+JAX_PLATFORMS=mps python benchmarks/bench.py --pdb protein.pdb --require-mps --output reports/protein_mps.json
 python benchmarks/compare.py protein.pdb --output reports/reference_timing.json
 ```
 

@@ -23,7 +23,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e '.[test,reference]'
       - run: python -m pip freeze > reports/ci-environment.txt
-      - run: pytest -ra -m 'not gpu' --junitxml=reports/ci-pytest.xml
+      - run: pytest -ra -m 'not mps' --junitxml=reports/ci-pytest.xml
       - if: always()
         uses: actions/upload-artifact@v4
         with:

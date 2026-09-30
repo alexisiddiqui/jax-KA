@@ -1,0 +1,180 @@
+{
+  "schema": 1,
+  "workload": "synthetic numerical graph; NOT a protein accuracy/speed comparison",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "python": "3.13.2",
+  "devices": [
+    "cpu:0"
+  ],
+  "backend": "cpu",
+  "packages": {
+    "jax": "0.11.1",
+    "jaxlib": "0.11.1",
+    "jax-mps": "0.11.0",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "biotite": "1.7.1",
+    "propka": "3.5.1"
+  },
+  "n_residues": 64,
+  "n_chains": 2,
+  "env_K": 8,
+  "pair_K": 9,
+  "cache_bytes": 1773760,
+  "preparation_seconds": 0.03321895806584507,
+  "sequence_dtype": "float32",
+  "sequence_batch_size": 8,
+  "selected_pka_site_count": 2,
+  "model_config": {
+    "steps": 64,
+    "damping": 0.35,
+    "gate_width": 20.0,
+    "nmin": 280.0,
+    "nmax": 560.0,
+    "desolv_prefactor": -13.0,
+    "surface_scale": 0.25,
+    "dielectric_buried": 30.0,
+    "dielectric_surface": 160.0,
+    "coulomb_scale": 1.0,
+    "hbond_scale": 1.0,
+    "desolv_scale": 1.0,
+    "root_steps": 28,
+    "root_batch_size": 4,
+    "ph_min": -10.0,
+    "ph_max": 24.0,
+    "residual_tolerance": 2e-05,
+    "root_tolerance": 2e-05,
+    "slope_min": 1e-05
+  },
+  "validation": {
+    "curve_all_converged": true,
+    "selected_direct_all_valid": true,
+    "grid_active_valid_count": 452,
+    "active_channel_count": 452,
+    "selected_grid_vs_direct_max_abs": 0.000675201416015625
+  },
+  "benchmark": {
+    "grid_midpoint_pka_all_forward": {
+      "compile_seconds": 0.3502061660401523,
+      "median_ms": 37.18843747628853,
+      "p10_ms": 36.8630959186703,
+      "p90_ms": 37.804733274970204,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 5120,
+        "output_size_in_bytes": 13312,
+        "temp_size_in_bytes": 2580592,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "grid_midpoint_pka_all_value_and_gradient_logits": {
+      "compile_seconds": 0.4950157090788707,
+      "median_ms": 120.24497898528352,
+      "p10_ms": 118.10242909705266,
+      "p90_ms": 122.22501608775929,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 5120,
+        "output_size_in_bytes": 5140,
+        "temp_size_in_bytes": 113840328,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "charge_forward": {
+      "compile_seconds": 0.21764350007288158,
+      "median_ms": 12.871792016085237,
+      "p10_ms": 12.648633390199393,
+      "p90_ms": 13.11073339311406,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 5120,
+        "output_size_in_bytes": 256,
+        "temp_size_in_bytes": 664880,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "charge_value_and_gradient_logits": {
+      "compile_seconds": 0.34348654199857265,
+      "median_ms": 26.33027103729546,
+      "p10_ms": 26.229616662021726,
+      "p90_ms": 26.41530859982595,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 5120,
+        "output_size_in_bytes": 5140,
+        "temp_size_in_bytes": 3307776,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "curves_29_ph_forward": {
+      "compile_seconds": 0.22842162498272955,
+      "median_ms": 29.781646037008613,
+      "p10_ms": 28.38820826727897,
+      "p90_ms": 30.201025307178497,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 5120,
+        "output_size_in_bytes": 213301,
+        "temp_size_in_bytes": 1239600,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "curves_value_and_gradient_logits": {
+      "compile_seconds": 0.4569070830475539,
+      "median_ms": 71.96577097056434,
+      "p10_ms": 69.12083817878738,
+      "p90_ms": 73.28335418133065,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 5120,
+        "output_size_in_bytes": 5140,
+        "temp_size_in_bytes": 46231688,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "selected_midpoint_pka_forward": {
+      "compile_seconds": 0.39444512501358986,
+      "median_ms": 497.9276249650866,
+      "p10_ms": 495.30699977185577,
+      "p90_ms": 505.73383360169834,
+      "repetitions": 5,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 5120,
+        "output_size_in_bytes": 100,
+        "temp_size_in_bytes": 772536,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "selected_midpoint_pka_value_and_gradient_logits": {
+      "compile_seconds": 0.6376472089905292,
+      "median_ms": 535.517834010534,
+      "p10_ms": 533.4182411665097,
+      "p90_ms": 554.3044000165537,
+      "repetitions": 5,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 5120,
+        "output_size_in_bytes": 5140,
+        "temp_size_in_bytes": 4853072,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "charge_sequence_batch": {
+      "compile_seconds": 0.21644150000065565,
+      "median_ms": 34.6293534967117,
+      "p10_ms": 34.39520419342443,
+      "p90_ms": 35.05436638370156,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 40960,
+        "output_size_in_bytes": 2048,
+        "temp_size_in_bytes": 6248496,
+        "alias_size_in_bytes": 0
+      }
+    }
+  },
+  "notes": [
+    "Compilation and preprocessing are separate from synchronized warm evaluations.",
+    "pKa midpoint cost scales with requested site count and is not the single-pH charge cost.",
+    "No reference speedup is inferred from a synthetic graph."
+  ]
+}

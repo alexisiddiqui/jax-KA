@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronized CPU/GPU benchmark. Synthetic timings are NOT protein/PROPKA timings."""
+"""Synchronized CPU/accelerator benchmark. Synthetic timings are NOT protein/PROPKA timings."""
 from __future__ import annotations
 import argparse
 from dataclasses import asdict
@@ -51,6 +51,7 @@ def main():
     parser.add_argument("--batch",type=int,default=8)
     parser.add_argument("--pka-sites",type=int,default=2)
     parser.add_argument("--all-pka",action="store_true",help="expensive: benchmark all 9 channels at all positions")
+    parser.add_argument("--require-mps",action="store_true")
     parser.add_argument("--require-gpu",action="store_true")
     parser.add_argument("--output",default="reports/benchmark.json")
     args=parser.parse_args()
@@ -58,6 +59,8 @@ def main():
         parser.error("repeat/batch/site counts must be positive")
     if args.require_gpu and not any(d.platform=="gpu" for d in jax.devices()):
         raise RuntimeError("GPU requested, but JAX reports no GPU device")
+    if args.require_mps and not any(d.platform=="mps" for d in jax.devices()):
+        raise RuntimeError("MPS requested, but JAX reports no MPS device")
     start=time.perf_counter()
     if args.pdb: cache=prepare(args.pdb);workload="molecular structure"
     elif args.cache: cache=StructureCache.load(args.cache);workload="loaded structural cache"
@@ -90,7 +93,7 @@ def main():
                 "active_channel_count":int(active.sum()),
                 "selected_grid_vs_direct_max_abs":float(np.max(np.abs(np.asarray(grid_check.value)[:min(args.pka_sites,cache.n_residues),2]-np.asarray(direct_check.value))))}
     packages={}
-    for package in ("jax","jaxlib","numpy","scipy","biotite","propka"):
+    for package in ("jax","jaxlib","jax-mps","numpy","scipy","biotite","propka"):
         try: packages[package]=version(package)
         except PackageNotFoundError: packages[package]=None
     out={"schema":1,"workload":workload,"platform":platform.platform(),"python":platform.python_version(),

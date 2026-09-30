@@ -1,0 +1,292 @@
+{
+  "schema": 1,
+  "reference": {
+    "backend": "modern",
+    "input_sha256": "63cb7bed2d94da230e122b9c4b257515a044fe66833abbf363d3ca273d132d94",
+    "version": "3.5.1",
+    "subversion": "modern package default; NOT PROPKA 3.0"
+  },
+  "cache_fingerprint": "e8355d474ee41edca74385661f690f74074a2853f1394737199f544802e95c16",
+  "model_config": {
+    "steps": 128,
+    "damping": 0.35,
+    "gate_width": 20.0,
+    "nmin": 280.0,
+    "nmax": 560.0,
+    "desolv_prefactor": -13.0,
+    "surface_scale": 0.25,
+    "dielectric_buried": 30.0,
+    "dielectric_surface": 160.0,
+    "coulomb_scale": 1.0,
+    "hbond_scale": 1.0,
+    "desolv_scale": 1.0,
+    "root_steps": 28,
+    "root_batch_size": 4,
+    "ph_min": -10.0,
+    "ph_max": 24.0,
+    "residual_tolerance": 2e-05,
+    "root_tolerance": 2e-05,
+    "slope_min": 1e-05
+  },
+  "n_sites": 12,
+  "sites": [
+    {
+      "residue": {
+        "chain": "A",
+        "number": 1,
+        "insertion": ""
+      },
+      "group": "NTERM",
+      "surrogate_pka": 8.219594955444336,
+      "reference_pka": 7.81,
+      "delta": 0.40959495544433633
+    },
+    {
+      "residue": {
+        "chain": "A",
+        "number": 2,
+        "insertion": ""
+      },
+      "group": "ASP",
+      "surrogate_pka": 3.723881721496582,
+      "reference_pka": 3.72,
+      "delta": 0.003881721496581836
+    },
+    {
+      "residue": {
+        "chain": "A",
+        "number": 3,
+        "insertion": ""
+      },
+      "group": "LYS",
+      "surrogate_pka": 10.448711395263672,
+      "reference_pka": 10.45,
+      "delta": -0.0012886047363274145
+    },
+    {
+      "residue": {
+        "chain": "A",
+        "number": 4,
+        "insertion": ""
+      },
+      "group": "HIS",
+      "surrogate_pka": 5.769384384155273,
+      "reference_pka": 6.5,
+      "delta": -0.7306156158447266
+    },
+    {
+      "residue": {
+        "chain": "A",
+        "number": 5,
+        "insertion": ""
+      },
+      "group": "GLU",
+      "surrogate_pka": 4.668424606323242,
+      "reference_pka": 4.48,
+      "delta": 0.18842460632324176
+    },
+    {
+      "residue": {
+        "chain": "A",
+        "number": 5,
+        "insertion": ""
+      },
+      "group": "CTERM",
+      "surrogate_pka": 3.1641621589660645,
+      "reference_pka": 3.16,
+      "delta": 0.004162158966064311
+    },
+    {
+      "residue": {
+        "chain": "B",
+        "number": 1,
+        "insertion": ""
+      },
+      "group": "NTERM",
+      "surrogate_pka": 8.21590805053711,
+      "reference_pka": 7.81,
+      "delta": 0.40590805053710977
+    },
+    {
+      "residue": {
+        "chain": "B",
+        "number": 2,
+        "insertion": ""
+      },
+      "group": "ASP",
+      "surrogate_pka": 3.7680163383483887,
+      "reference_pka": 3.77,
+      "delta": -0.001983661651611346
+    },
+    {
+      "residue": {
+        "chain": "B",
+        "number": 3,
+        "insertion": ""
+      },
+      "group": "LYS",
+      "surrogate_pka": 10.439336776733398,
+      "reference_pka": 10.44,
+      "delta": -0.0006632232666010651
+    },
+    {
+      "residue": {
+        "chain": "B",
+        "number": 4,
+        "insertion": ""
+      },
+      "group": "HIS",
+      "surrogate_pka": 5.7937517166137695,
+      "reference_pka": 6.53,
+      "delta": -0.7362482833862307
+    },
+    {
+      "residue": {
+        "chain": "B",
+        "number": 5,
+        "insertion": ""
+      },
+      "group": "GLU",
+      "surrogate_pka": 4.6580352783203125,
+      "reference_pka": 4.47,
+      "delta": 0.18803527832031275
+    },
+    {
+      "residue": {
+        "chain": "B",
+        "number": 5,
+        "insertion": ""
+      },
+      "group": "CTERM",
+      "surrogate_pka": 3.143742561340332,
+      "reference_pka": 3.14,
+      "delta": 0.003742561340331907
+    }
+  ],
+  "excluded_reference_sites": [],
+  "metrics": {
+    "pka_mae": 0.22287906010945632,
+    "pka_rmse": 0.35110582657487677,
+    "pka_max_abs": 0.7362482833862307,
+    "site_charge_rmse": 0.055732997418120545,
+    "total_charge_rmse": 0.2296973976625456
+  },
+  "ph": [
+    0.0,
+    1.0,
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    7.0,
+    8.0,
+    9.0,
+    10.0,
+    11.0,
+    12.0,
+    13.0,
+    14.0
+  ],
+  "surrogate_total_charge": [
+    5.998189926147461,
+    5.981987476348877,
+    5.828706741333008,
+    4.824304103851318,
+    2.5756216049194336,
+    0.47960877418518066,
+    -1.1557835340499878,
+    -1.990140438079834,
+    -2.7484946250915527,
+    -3.7847213745117188,
+    -4.496513843536377,
+    -5.56164026260376,
+    -5.945571422576904,
+    -5.99442195892334,
+    -5.999441146850586
+  ],
+  "reference_total_charge": [
+    5.998156792815179,
+    5.9816635919423655,
+    5.825604683376146,
+    4.800287350065485,
+    2.4541240220277336,
+    0.5307377822322703,
+    -0.4268232556716183,
+    -1.7682493609286185,
+    -3.158311487004468,
+    -3.9413991890209137,
+    -4.514764794934847,
+    -5.5628265708403175,
+    -5.945648936088213,
+    -5.9944292988233165,
+    -5.999441536532299
+  ],
+  "reference_seconds_including_process_startup": 0.22533179097808897,
+  "interpretation": "mean-field surrogate vs PROPKA-reported-pKa HH curves; not microscopic parity",
+  "timings": {
+    "preparation_seconds": 4.292393666924909,
+    "jax_charge_forward": {
+      "compile_seconds": 0.3272534579737112,
+      "median_ms": 8.726417028810829,
+      "p10_ms": 8.629224495962262,
+      "p90_ms": 8.91875480301678,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 800,
+        "output_size_in_bytes": 40,
+        "temp_size_in_bytes": 74544,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "jax_curves_29_ph": {
+      "compile_seconds": 0.505752541939728,
+      "median_ms": 24.443312431685627,
+      "p10_ms": 23.437670257408172,
+      "p90_ms": 28.95112950354814,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 800,
+        "output_size_in_bytes": 34021,
+        "temp_size_in_bytes": 214640,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "jax_physical_site_direct_pkas": {
+      "compile_seconds": 0.5837482080096379,
+      "median_ms": 826.5722920186818,
+      "p10_ms": 758.0950919538736,
+      "p90_ms": 876.0147919878364,
+      "repetitions": 3,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 800,
+        "output_size_in_bytes": 320,
+        "temp_size_in_bytes": 136640,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "jax_all_conditional_grid_pkas_73_ph": {
+      "compile_seconds": 0.8531454158946872,
+      "median_ms": 51.03862500982359,
+      "p10_ms": 45.89586640940979,
+      "p90_ms": 62.400075548794106,
+      "repetitions": 10,
+      "compiled_memory_bytes": {
+        "argument_size_in_bytes": 800,
+        "output_size_in_bytes": 2134,
+        "temp_size_in_bytes": 439600,
+        "alias_size_in_bytes": 0
+      }
+    },
+    "reference_complete_process_seconds": [
+      0.22533179097808897,
+      0.17746283300220966,
+      0.1730609170626849
+    ],
+    "reference_complete_process_median_seconds": 0.17746283300220966
+  },
+  "device": [
+    "cpu:0"
+  ],
+  "timing_scope": "JAX warmed sequence-only kernels vs PROPKA full subprocess (startup, parsing, calculation, writing). Different algorithms/outputs; no automatic scientific speedup ratio."
+}

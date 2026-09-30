@@ -5,11 +5,12 @@ import jax.numpy as jnp
 from jaxpropka import TitrationModel
 from jaxpropka.synthetic import synthetic_cache
 
+
 @pytest.mark.mps
 def test_mps_float32_forward_reverse_and_midpoint():
-    jax.config.update("jax_enable_x64",False)
     devices=[d for d in jax.devices() if d.platform=='mps']
     if not devices: pytest.skip('JAX MPS unavailable; MPS execution NOT validated')
+    jax.config.update("jax_enable_x64",False)
     with jax.default_device(devices[0]):
         model=TitrationModel(synthetic_cache(n=8,chains=2))
         curve=model.curves([3.,7.,11.]);pka=model.pka_sites([(0,'HIS')])

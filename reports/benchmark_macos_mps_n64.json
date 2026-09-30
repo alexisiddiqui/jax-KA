@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "workload": "synthetic numerical graph; NOT a protein accuracy/speed comparison",
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "python": "3.13.2",
+  "devices": [
+    "MPS:0"
+  ],
+  "backend": "mps",
+  "packages": {
+    "jax": "0.11.1",
+    "jaxlib": "0.11.1",
+    "jax-mps": "0.11.0",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "biotite": "1.7.1",
+    "propka": "3.5.1"
+  },
+  "n_residues": 64,
+  "n_chains": 2,
+  "env_K": 8,
+  "pair_K": 9,
+  "cache_bytes": 1773760,
+  "preparation_seconds": 0.031038624932989478,
+  "sequence_dtype": "float32",
+  "sequence_batch_size": 8,
+  "selected_pka_site_count": 2,
+  "model_config": {
+    "steps": 64,
+    "damping": 0.35,
+    "gate_width": 20.0,
+    "nmin": 280.0,
+    "nmax": 560.0,
+    "desolv_prefactor": -13.0,
+    "surface_scale": 0.25,
+    "dielectric_buried": 30.0,
+    "dielectric_surface": 160.0,
+    "coulomb_scale": 1.0,
+    "hbond_scale": 1.0,
+    "desolv_scale": 1.0,
+    "root_steps": 28,
+    "root_batch_size": 4,
+    "ph_min": -10.0,
+    "ph_max": 24.0,
+    "residual_tolerance": 2e-05,
+    "root_tolerance": 2e-05,
+    "slope_min": 1e-05
+  },
+  "validation": {
+    "curve_all_converged": true,
+    "selected_direct_all_valid": true,
+    "grid_active_valid_count": 452,
+    "active_channel_count": 452,
+    "selected_grid_vs_direct_max_abs": 0.000675201416015625
+  },
+  "benchmark": {
+    "grid_midpoint_pka_all_forward": {
+      "compile_seconds": 0.09379179193638265,
+      "median_ms": 12.088958465028554,
+      "p10_ms": 11.011929262895137,
+      "p90_ms": 29.539554181974353,
+      "repetitions": 10
+    },
+    "grid_midpoint_pka_all_value_and_gradient_logits": {
+      "compile_seconds": 0.1628327090293169,
+      "median_ms": 36.15060402080417,
+      "p10_ms": 33.53816306916997,
+      "p90_ms": 38.21170425508171,
+      "repetitions": 10
+    },
+    "charge_forward": {
+      "compile_seconds": 0.04546433291397989,
+      "median_ms": 5.643292039167136,
+      "p10_ms": 5.397470656316727,
+      "p90_ms": 6.4914493705146015,
+      "repetitions": 10
+    },
+    "charge_value_and_gradient_logits": {
+      "compile_seconds": 0.10070070798974484,
+      "median_ms": 21.009500022046268,
+      "p10_ms": 20.593053882475942,
+      "p90_ms": 21.72210835851729,
+      "repetitions": 10
+    },
+    "curves_29_ph_forward": {
+      "compile_seconds": 0.048247208003886044,
+      "median_ms": 14.356812462210655,
+      "p10_ms": 13.057986844796687,
+      "p90_ms": 19.052999990526587,
+      "repetitions": 10
+    },
+    "curves_value_and_gradient_logits": {
+      "compile_seconds": 0.09519166697282344,
+      "median_ms": 24.327145947609097,
+      "p10_ms": 22.78127094032243,
+      "p90_ms": 32.82021642662585,
+      "repetitions": 10
+    },
+    "selected_midpoint_pka_forward": {
+      "compile_seconds": 0.1331800000043586,
+      "median_ms": 282.40454103797674,
+      "p10_ms": 212.40982520394027,
+      "p90_ms": 301.5102000441402,
+      "repetitions": 5
+    },
+    "selected_midpoint_pka_value_and_gradient_logits": {
+      "compile_seconds": 0.3081028340384364,
+      "median_ms": 274.0527919959277,
+      "p10_ms": 207.36759142018855,
+      "p90_ms": 285.15499101486057,
+      "repetitions": 5
+    },
+    "charge_sequence_batch": {
+      "compile_seconds": 0.06215333298314363,
+      "median_ms": 11.717125016730279,
+      "p10_ms": 11.362413177266717,
+      "p90_ms": 12.881312158424405,
+      "repetitions": 10
+    }
+  },
+  "notes": [
+    "Compilation and preprocessing are separate from synchronized warm evaluations.",
+    "pKa midpoint cost scales with requested site count and is not the single-pH charge cost.",
+    "No reference speedup is inferred from a synthetic graph."
+  ]
+}

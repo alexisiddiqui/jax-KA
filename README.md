@@ -2,7 +2,7 @@
 
 Frozen-structure, soft-sequence titration in JAX, with Biotite topology handling.
 
-**Scientific status:** this is a PROPKA-3.0/Nov30-parameterized **mean-field surrogate**, not a numerically faithful port of PROPKA's coupled determinant algorithm. The structural pipeline, differentiable outputs, reference adapters, tests, CLI and benchmarks are implemented. Biotite integration, pinned pip PROPKA primitives and the full reference path are exercised by the test suite. GPU execution remains unvalidated. See [validation status](docs/VALIDATION.md).
+**Scientific status:** this is a PROPKA-3.0/Nov30-parameterized **mean-field surrogate**, not a numerically faithful port of PROPKA's coupled determinant algorithm. The structural pipeline, differentiable outputs, reference adapters, tests, CLI and benchmarks are implemented. Biotite integration, pinned pip PROPKA primitives, the full reference path and float32 MPS execution are exercised by the test suite. CUDA remains a future channel. See [validation status](docs/VALIDATION.md).
 
 The compiled readouts accept only `P[N,20]`. Geometry, candidate side chains, residue identities/keys, terminal masks, neighbor graphs and geometric kernels are prepared once outside JIT. An output selection never removes the other residues or chains from the physical environment.
 
@@ -15,7 +15,19 @@ python -m pip install -e '.[test,reference]'
 pytest -ra
 ```
 
-The `reference` extra installs the pinned PyPI release `propka==3.5.1`. This is the default external reference used by the CLI, tests and comparison benchmark. For GPU use, install a JAX/JAXLIB build appropriate for the device first, then verify `jax.devices()` and run the GPU test. The package does not choose a CUDA version for the host.
+The `reference` extra installs the pinned PyPI release `propka==3.5.1`. This is the default external reference used by the CLI, tests and comparison benchmark.
+
+Apple Silicon MPS uses a separate, pinned Python 3.12+ channel:
+
+```bash
+python3.13 -m venv .venv-mps
+source .venv-mps/bin/activate
+python -m pip install -e '.[test,reference,mps]'
+JAX_PLATFORMS=cpu pytest -ra -m 'not mps'
+JAX_PLATFORMS=mps pytest -ra -m mps
+```
+
+The `mps` extra pins JAX/JAXLIB 0.11.1 and `jax-mps` 0.11.0 because the plugin's StableHLO format must match JAXLIB. Setting `JAX_PLATFORMS=mps` prevents a CPU fallback from passing the MPS test. CUDA will use its own optional dependency channel when added.
 
 The core dependency ranges in `pyproject.toml` are compatibility targets, not a claim that every version combination was tested. PROPKA is pinned because its output is used as regression data. The included reports record the exact executed environment.
 
@@ -194,7 +206,7 @@ The `legacy30` backend remains available for an explicit historical comparison w
 
 ```bash
 # No molecular dependencies exercised by this subset:
-pytest -ra -m 'not integration and not reference and not gpu'
+pytest -ra -m 'not integration and not reference and not mps'
 
 # Full installation: fail, rather than silently skip, when dependencies are absent.
 JAXPROPKA_REQUIRE_INTEGRATION=1 JAXPROPKA_REQUIRE_REFERENCE=1 pytest -ra
@@ -202,9 +214,9 @@ JAXPROPKA_REQUIRE_INTEGRATION=1 JAXPROPKA_REQUIRE_REFERENCE=1 pytest -ra
 # Pinned pip PROPKA integration and discrepancy report:
 pytest -ra tests/test_external_reference.py
 
-# GPU execution must actually find a GPU, not silently time a CPU fallback:
-python benchmarks/bench.py --cache structure-cache.npz --require-gpu
-pytest -ra -m gpu
+# MPS execution must actually use Metal, not silently fall back to CPU:
+JAX_PLATFORMS=mps python benchmarks/bench.py --cache structure-cache.npz --require-mps
+JAX_PLATFORMS=mps pytest -ra -m mps
 
 # CPU numerical scaling and separate forward/gradient timings:
 python benchmarks/bench.py --synthetic-n 64 --output reports/cpu.json
@@ -218,7 +230,7 @@ jaxpropka prepare tests/data/two_chains.pdb complex.npz
 jaxpropka predict complex.npz --pka --residues 1,3,6,8 --output prediction.npz
 ```
 
-Benchmarks separate host preprocessing, compilation and synchronized warm device execution. Charge, curves, selected direct pKas, all-grid pKas and sequence batching have distinct timings. `--all-pka` explicitly enables the much more expensive all-channel direct-root benchmark. Compiled temporary-memory estimates are reported where supported; they are not physical peak GPU allocation measurements.
+Benchmarks separate host preprocessing, compilation and synchronized warm device execution. Charge, curves, selected direct pKas, all-grid pKas and sequence batching have distinct timings. `--all-pka` explicitly enables the much more expensive all-channel direct-root benchmark. Compiled temporary-memory estimates are reported where supported; they are not physical peak accelerator allocation measurements.
 
 [Benchmark results](docs/BENCHMARKS.md) and [validation inventory](docs/VALIDATION.md) describe what was actually executed. Included GitHub workflows are configurations to run after pushing this repository, **not a claim of completed CI runs**. The original-3.0 workflow requires an explicit reviewed commit.
 
@@ -228,7 +240,7 @@ Benchmarks separate host preprocessing, compilation and synchronized warm device
 src/jaxpropka/       topology, frozen candidates, sparse kernels, JAX model, CLI
                     portable cache and external reference adapters
 benchmarks/         synchronized kernel and reference-process comparisons
-tests/              analytic, gradient, regression, topology, reference, GPU tests
+tests/              analytic, gradient, regression, topology, reference, MPS tests
 scripts/            explicit reference/data fetch and synthetic baseline recording
 examples/           sequence-loss integration example
 docs/               equations, approximation boundaries and validation status
