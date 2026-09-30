@@ -47,3 +47,46 @@ python benchmarks/compare.py protein.pdb --output reports/reference_timing.json
 The last two commands were not run here. The comparison script labels warmed JAX evaluation separately from the complete PROPKA subprocess, including its startup, parsing, computation and writing; it does not automatically present those unlike scopes as a speedup ratio.
 
 Raw files: `reports/benchmark_cpu_n16_all.json` and `reports/benchmark_cpu_n64.json`.
+
+## Reusing compilation across structures
+
+`benchmarks/regress_foldbench.py` passes structure arrays to shared JIT kernels
+and pads `(N, Ke, Kc)` to multiples of `(64, 16, 16)` by default. Override these
+with `--bucket-multiple N Ke Kc`. Larger multiples reduce the number of shape
+variants but increase padded memory and computation. Each successful case records
+its actual `bucket_capacity` in the report. Neighbors are never truncated.
+
+Workers retain their JIT caches between cases. For a fixed operation, pH-grid
+length, dtype, and model configuration, structures with the same padded shapes
+reuse compilation within a worker. Different workers warm their caches separately;
+there is no persistent disk cache. Padding is numerical only: inactive groups and
+edges are masked, and report metrics use real residues and physical sites.
+
+The same path can be used directly:
+
+```python
+import jax
+import numpy as np
+from jaxpropka import ModelConfig
+from jaxpropka.batching import pack_inputs
+from jaxpropka.model import grid_pka_kernel, one_hot
+
+config = ModelConfig(steps=128)
+ph = np.linspace(config.ph_min, config.ph_max, 145, dtype=np.float32)
+for cache in structure_caches:
+    arrays, p, n = pack_inputs(cache, one_hot(cache.native_index))
+    arrays, p = jax.device_put((arrays, p))
+    result = jax.device_get(grid_pka_kernel(arrays, p, ph, config=config))
+    values, valid = result.value[:n], result.valid[:n]
+```
+
+`curve_kernel` accepts the same arguments and returns full site curves without
+chain labels or aggregation. Keep both kernels at module scope and pass new
+structures as arguments. The existing `TitrationModel` P-only readouts retain
+their fixed-structure interface and remain useful for sequence design on one
+structure. Direct-root pKa readouts still use that interface.
+
+Use `JAX_LOG_COMPILES=1 JAX_EXPLAIN_CACHE_MISSES=1` to inspect specialization.
+When timing a sweep, measure initial bucket compilation separately and synchronize
+device results before recording execution time. The FoldBench regression runner
+reports accuracy metrics, not timings.

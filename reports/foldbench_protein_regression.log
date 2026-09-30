@@ -1,0 +1,5 @@
+[1/334] 5sbj-assembly1: failed (passed=0, failed=1)
+[2/334] 7pv5-assembly1: failed (passed=0, failed=2)
+[3/334] 7qp5-assembly1: failed (passed=0, failed=3)
+[4/334] 7t9r-assembly1: passed (passed=1, failed=3)
+[5/334] 7tlh-assembly1: passed (passed=2, failed=3)

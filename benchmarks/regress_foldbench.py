@@ -28,14 +28,16 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _run_case(item: tuple[str, str, str, int, int]) -> dict:
-    pdb_id, chain_id, cif_name, steps, grid_points = item
+def _run_case(item: tuple[str, str, str, int, int, tuple[int, int, int]]) -> dict:
+    pdb_id, chain_id, cif_name, steps, grid_points, bucket_multiple = item
     stage = "load"
     try:
         import jax
         from biotite.structure.io import pdbx
-        from jaxpropka import GROUPS, ModelConfig, TitrationModel
+        from jaxpropka import GROUPS, ModelConfig
+        from jaxpropka.batching import pack_inputs
         from jaxpropka.geometry import build_candidates
+        from jaxpropka.model import curve_kernel, grid_pka_kernel, one_hot
         from jaxpropka.parameters import GROUP_AA
         from jaxpropka.precompute import build_cache
         from jaxpropka.reference import reference_charge, run_reference, write_reference_structure
@@ -77,8 +79,13 @@ def _run_case(item: tuple[str, str, str, int, int]) -> dict:
         candidates = build_candidates(topology, missing_sidechain="template")
         stage = "cache"
         cache = build_cache(topology, candidates)
-        model = TitrationModel(cache, ModelConfig(steps=steps))
-        probabilities = model.native_probabilities
+        config = ModelConfig(steps=steps)
+        arrays, probabilities, n_residues = pack_inputs(
+            cache, one_hot(cache.native_index), bucket_multiple=bucket_multiple
+        )
+        bucket_capacity = (probabilities.shape[0], arrays["env_neighbors"].shape[1],
+                           arrays["neighbors"].shape[1])
+        arrays, probabilities = jax.device_put((arrays, probabilities))
 
         stage = "reference"
         with tempfile.TemporaryDirectory(prefix="jaxpropka-foldbench-reference-") as directory:
@@ -98,10 +105,10 @@ def _run_case(item: tuple[str, str, str, int, int]) -> dict:
             raise ValueError("no active physical titratable sites")
 
         stage = "grid_pka"
-        grid = np.linspace(model.config.ph_min, model.config.ph_max, grid_points)
-        grid_result = jax.device_get(model.pka_from_grid(grid)(probabilities))
-        grid_values = np.asarray(grid_result.value)
-        grid_valid = np.asarray(grid_result.valid)
+        grid = np.linspace(config.ph_min, config.ph_max, grid_points, dtype=np.float32)
+        grid_result = jax.device_get(grid_pka_kernel(arrays, probabilities, grid, config=config))
+        grid_values = np.asarray(grid_result.value)[:n_residues]
+        grid_valid = np.asarray(grid_result.valid)[:n_residues]
         invalid = [
             (str(cache.keys[index]), group)
             for index, group in expected
@@ -120,8 +127,8 @@ def _run_case(item: tuple[str, str, str, int, int]) -> dict:
             raise ValueError(f"reference is missing required sites: {missing[:20]}")
 
         stage = "charge_curves"
-        ph = np.arange(0.0, 15.0)
-        curves = jax.device_get(model.curves(ph)(probabilities))
+        ph = np.arange(0.0, 15.0, dtype=np.float32)
+        curves = jax.device_get(curve_kernel(arrays, probabilities, ph, config=config))
         if not np.all(curves.converged):
             raise ValueError("occupancy solver did not converge over reference pH grid")
 
@@ -165,6 +172,7 @@ def _run_case(item: tuple[str, str, str, int, int]) -> dict:
             "status": "passed",
             "source_sha256": source_sha256,
             "n_residues": cache.n_residues,
+            "bucket_capacity": dict(zip(("N", "Ke", "Kc"), bucket_capacity)),
             "n_sites": len(rows),
             "omitted_nonprotein": sorted(omitted),
             "gap_count": len(topology.metadata["gaps"]),
@@ -197,13 +205,6 @@ def _run_case(item: tuple[str, str, str, int, int]) -> dict:
             "error": str(error),
             "traceback": traceback.format_exc(limit=5),
         }
-    finally:
-        try:
-            import jax
-
-            jax.clear_caches()
-        except Exception:
-            pass
 
 
 def _summary(cases: list[dict], total: int) -> dict:
@@ -245,11 +246,16 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--steps", type=int, default=128)
     parser.add_argument("--grid-points", type=int, default=145)
+    parser.add_argument("--bucket-multiple", type=int, nargs=3, default=(64, 16, 16),
+                        metavar=("N", "Ke", "Kc"),
+                        help="round residue/environment/pair capacities up to these multiples")
     parser.add_argument("--max-cases", type=int)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     if args.workers < 1 or args.steps < 1 or args.grid_points < 2:
         parser.error("workers, steps and grid-points must be positive")
+    if any(value < 1 for value in args.bucket_multiple):
+        parser.error("bucket multiples must be positive")
 
     rows = list(csv.DictReader(args.manifest.open(newline="", encoding="utf-8")))
     if args.max_cases is not None:
@@ -307,7 +313,8 @@ def main() -> None:
                 (root / filename).write_bytes(source.read())
 
         work = [
-            (row["pdb_id"], row["chain_id"], str(root / f"{row['pdb_id']}.cif"), args.steps, args.grid_points)
+            (row["pdb_id"], row["chain_id"], str(root / f"{row['pdb_id']}.cif"),
+             args.steps, args.grid_points, tuple(args.bucket_multiple))
             for row in pending_rows
         ]
         with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as executor:

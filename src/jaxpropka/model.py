@@ -1,5 +1,6 @@
 """JAX-only sequence evaluation, titration curves, and differentiable midpoints."""
 from __future__ import annotations
+from functools import partial
 from typing import NamedTuple
 import jax
 import jax.numpy as jnp
@@ -54,6 +55,125 @@ class GridPkaResult(NamedTuple):
     grid_residual: jax.Array   # maximum full-state residual across the pH grid
 
 
+class SiteCurveResult(NamedTuple):
+    """Full numerical curves; residue labels and chain aggregation stay outside JIT."""
+    ph: jax.Array
+    protonated: jax.Array
+    site_charge: jax.Array
+    residue_charge: jax.Array
+    total_charge: jax.Array
+    probability: jax.Array
+    intrinsic_pka: jax.Array
+    effective_pka: jax.Array
+    residual: jax.Array
+    weighted_residual: jax.Array
+    converged: jax.Array
+
+
+def _local_terms(d, p, cfg):
+    n = d["group_mask"].shape[0]
+    if p.shape != (n,20) or not jnp.issubdtype(p.dtype,jnp.floating):
+        raise ValueError(f"expected floating P[{n},20]")
+    native = jax.nn.one_hot(d["native_index"],20,dtype=p.dtype)
+    p = jnp.where(d["frozen"][:,None],native,p)
+    gm, idx = d["group_mask"], d["neighbors"]
+    # Cast structural floats to the sequence dtype for both float32 and float64.
+    f = lambda name: d[name].astype(p.dtype)
+    pn = p[d["env_neighbors"]]
+    em = d["env_mask"][:,:,None,None]
+    volume = f("bb_volume") + jnp.einsum("nkga,nka->ng",jnp.where(em,f("volume"),0),pn)
+    mass = f("bb_mass") + jnp.einsum("nkga,nka->ng",jnp.where(em,f("mass"),0),pn)
+    hb = f("bb_hbond") + jnp.einsum("nga,na->ng",f("local_hbond"),p) + jnp.einsum("nkga,nka->ng",jnp.where(em,f("hbond"),0),pn)
+    burial = jnp.clip((mass-cfg.nmin)/(cfg.nmax-cfg.nmin),0,1)
+    desolv = (jnp.asarray(FORMAL_CHARGE,dtype=p.dtype) * cfg.desolv_prefactor * volume
+              * (cfg.surface_scale+(1-cfg.surface_scale)*burial))
+    intrinsic = (jnp.asarray(MODEL_PKA,dtype=p.dtype)+cfg.desolv_scale*desolv
+                 +cfg.hbond_scale*(hb+f("reorganization")*burial))
+    intrinsic = jnp.where(gm,intrinsic,0)
+    weights = jnp.concatenate((p[:,GROUP_AA],jnp.ones((p.shape[0],2),dtype=p.dtype)),axis=-1)*gm
+    pair_mass = mass[:,None,:,None]+mass[idx][:,:,None,:]
+    pair_burial = jnp.clip((pair_mass-2*cfg.nmin)/(2*(cfg.nmax-cfg.nmin)),0,1)
+    eps = cfg.dielectric_surface-(cfg.dielectric_surface-cfg.dielectric_buried)*pair_burial
+    # Retain the COO--TYR burial eligibility exception and optional smooth gate.
+    coo = jnp.asarray([True,True,False,False,False,False,False,False,True])
+    tyr = jnp.arange(9)==4
+    exception = (coo[:,None]&tyr[None,:]) | (tyr[:,None]&coo[None,:])
+    if cfg.gate_width > 0:
+        eligibility = jax.nn.sigmoid((pair_mass-cfg.nmin)/cfg.gate_width)
+    else:
+        eligibility = (pair_mass>=cfg.nmin).astype(p.dtype)
+    eligibility = jnp.where(exception,1,eligibility)
+    c = cfg.coulomb_scale * f("coulomb_geometry")/eps * eligibility
+    c = jnp.where(d["pair_mask"],c,0)
+    hd = cfg.hbond_scale*jnp.where(d["pair_mask"],f("hb_donor"),0)
+    hr = cfg.hbond_scale*jnp.where(d["pair_mask"],f("hb_reverse"),0)
+    wn = weights[idx][:,:,None,:]
+    # E_HB = -Hd*h_i*(1-h_j) - Hr*(1-h_i)*h_j.
+    # dE/dh_i = -Hd + (Hd+Hr)*h_j. This is not a signed PROPKA determinant.
+    q0 = jnp.asarray(Q_DEPROT,dtype=p.dtype)
+    field0 = jnp.sum((c*q0[None,None,None,:]-hd)*wn,axis=(1,3))
+    return LocalTerms(intrinsic,field0,(c+hd+hr)*wn,weights,burial)
+
+
+def _field(d, terms, h):
+    return terms.field0+jnp.einsum("nkgt,nkt->ng",terms.coupling,h[d["neighbors"]])
+
+
+def _solve(d, terms, ph, cfg):
+    log10 = jnp.log(jnp.asarray(10,dtype=terms.intrinsic.dtype))
+    def target(h):
+        return jnp.where(d["group_mask"],jax.nn.sigmoid(log10*(terms.intrinsic-ph-_field(d,terms,h))),0)
+    h = jnp.where(d["group_mask"],jax.nn.sigmoid(log10*(terms.intrinsic-ph-terms.field0)),0)
+    def step(_, old):
+        return old+cfg.damping*(target(old)-old)
+    h = jax.lax.fori_loop(0,cfg.steps,step,h)
+    error = jnp.abs(target(h)-h)
+    return h,jnp.max(error),jnp.max(error*terms.weights)
+
+
+@partial(jax.jit, static_argnames=("config",))
+def curve_kernel(arrays, probabilities, ph, *, config):
+    """Shared all-site curves with structure and pH values as dynamic inputs.
+
+    Inputs must be validated outside JIT. Use batching.pack_inputs for padded
+    multi-structure evaluation; padded residues have zero charge and residual.
+    """
+    terms = _local_terms(arrays,probabilities,config)
+    ph = jnp.asarray(ph,dtype=probabilities.dtype)
+    h,residual,wresidual = jax.vmap(lambda x:_solve(arrays,terms,x,config))(ph)
+    charge = terms.weights[None,:,:]*(jnp.asarray(Q_DEPROT,dtype=probabilities.dtype)[None,None,:]+h)
+    residue_charge = charge.sum(-1)
+    effective = jax.vmap(lambda x:terms.intrinsic-_field(arrays,terms,x))(h)
+    return SiteCurveResult(ph,h,charge,residue_charge,residue_charge.sum(-1),
+                           terms.weights,terms.intrinsic,effective,
+                           residual,wresidual,residual<config.residual_tolerance)
+
+
+@partial(jax.jit, static_argnames=("config",))
+def grid_pka_kernel(arrays, probabilities, ph, *, config):
+    """Shared grid interpolation; ph must be finite, increasing, and length >= 2."""
+    out = curve_kernel(arrays,probabilities,ph,config=config)
+    y, x = out.protonated, out.ph
+    # First sampled value <= 1/2; clamp to a safe interval before masking.
+    upper = jnp.clip(jnp.argmax(y<=.5,axis=0),1,len(ph)-1)
+    lower = upper-1
+    y0 = jnp.take_along_axis(y,lower[None,:,:],axis=0)[0]
+    y1 = jnp.take_along_axis(y,upper[None,:,:],axis=0)[0]
+    width = x[upper]-x[lower]
+    delta = y1-y0
+    slope = delta/width
+    safe = slope < -config.slope_min
+    bracketed = arrays["group_mask"] & (y[0]>=.5) & (y[-1]<=.5)
+    sampled_monotone = jnp.all(jnp.diff(y,axis=0)<=1e-6,axis=0)
+    good = bracketed & safe
+    value = x[lower]+(.5-y0)*width/jnp.where(safe,delta,-1)
+    residual = jnp.max(out.residual)
+    valid = good & sampled_monotone & jnp.all(out.converged)
+    return GridPkaResult(jnp.where(good,value,0),valid,bracketed,out.probability,slope,
+                         jnp.where(bracketed,width,0),sampled_monotone,
+                         jnp.broadcast_to(residual,value.shape))
+
+
 def one_hot(sequence, dtype=np.float32):
     """Encode a one-letter sequence or a vector of indices, without implicit gaps."""
     if isinstance(sequence,str):
@@ -82,11 +202,10 @@ class TitrationModel:
     def __init__(self, cache: StructureCache, config: ModelConfig | None = None):
         self.cache = cache.validate()
         self.config = config or ModelConfig()
-        self._d = {k:jnp.asarray(v) for k,v in vars(cache).items() if isinstance(v,np.ndarray)}
+        self._d = {k:jnp.asarray(v) for k,v in vars(cache).items()
+                   if isinstance(v,np.ndarray) and k != "chain_index"}
         self._native = jnp.asarray(one_hot(cache.native_index))
         self._gm = self._d["group_mask"]
-        self._idx = self._d["neighbors"]
-        self._q0 = jnp.asarray(Q_DEPROT)
         self._root = self._make_root()
 
     @property
@@ -114,67 +233,17 @@ class TitrationModel:
         return jnp.where(self._d["frozen"][:,None],self._native.astype(p.dtype),p)
 
     def _local_terms(self, p):
-        if p.shape != (self.cache.n_residues,20) or not jnp.issubdtype(p.dtype,jnp.floating):
-            raise ValueError(f"expected floating P[{self.cache.n_residues},20]")
-        p = jnp.where(self._d["frozen"][:,None],self._native.astype(p.dtype),p)
-        d, cfg = self._d, self.config
-        # Cast structural floats to the sequence dtype; float64 works when JAX
-        # x64 is enabled and does not accidentally upcast float32 design loops.
-        f = lambda name: d[name].astype(p.dtype)
-        pn = p[d["env_neighbors"]]
-        em = d["env_mask"][:,:,None,None]
-        volume = f("bb_volume") + jnp.einsum("nkga,nka->ng",jnp.where(em,f("volume"),0),pn)
-        mass = f("bb_mass") + jnp.einsum("nkga,nka->ng",jnp.where(em,f("mass"),0),pn)
-        hb = f("bb_hbond") + jnp.einsum("nga,na->ng",f("local_hbond"),p) + jnp.einsum("nkga,nka->ng",jnp.where(em,f("hbond"),0),pn)
-        burial = jnp.clip((mass-cfg.nmin)/(cfg.nmax-cfg.nmin),0,1)
-        desolv = (jnp.asarray(FORMAL_CHARGE,dtype=p.dtype) * cfg.desolv_prefactor * volume
-                  * (cfg.surface_scale+(1-cfg.surface_scale)*burial))
-        intrinsic = (jnp.asarray(MODEL_PKA,dtype=p.dtype)+cfg.desolv_scale*desolv
-                     +cfg.hbond_scale*(hb+f("reorganization")*burial))
-        intrinsic = jnp.where(self._gm,intrinsic,0)
-        weights = jnp.concatenate((p[:,GROUP_AA],jnp.ones((p.shape[0],2),dtype=p.dtype)),axis=-1)
-        weights = weights*self._gm
-        pair_mass = mass[:,None,:,None]+mass[self._idx][:,:,None,:]
-        pair_burial = jnp.clip((pair_mass-2*cfg.nmin)/(2*(cfg.nmax-cfg.nmin)),0,1)
-        eps = cfg.dielectric_surface-(cfg.dielectric_surface-cfg.dielectric_buried)*pair_burial
-        # PROPKA's COO--TYR burial eligibility exception is retained. Its hard
-        # sequence-dependent gate is smoothed by default, and can be exact (0).
-        coo = jnp.asarray([True,True,False,False,False,False,False,False,True])
-        tyr = jnp.arange(9)==4
-        exception = (coo[:,None]&tyr[None,:]) | (tyr[:,None]&coo[None,:])
-        if cfg.gate_width > 0:
-            eligibility = jax.nn.sigmoid((pair_mass-cfg.nmin)/cfg.gate_width)
-        else:
-            eligibility = (pair_mass>=cfg.nmin).astype(p.dtype)
-        eligibility = jnp.where(exception,1,eligibility)
-        c = cfg.coulomb_scale * f("coulomb_geometry")/eps * eligibility
-        c = jnp.where(d["pair_mask"],c,0)
-        hd = cfg.hbond_scale*jnp.where(d["pair_mask"],f("hb_donor"),0)
-        hr = cfg.hbond_scale*jnp.where(d["pair_mask"],f("hb_reverse"),0)
-        wn = weights[self._idx][:,:,None,:]
-        # E_HB = -Hd*h_i*(1-h_j) - Hr*(1-h_i)*h_j.
-        # dE/dh_i = -Hd + (Hd+Hr)*h_j. This is not a signed PROPKA determinant.
-        field0 = jnp.sum((c*self._q0.astype(p.dtype)[None,None,None,:]-hd)*wn,axis=(1,3))
-        coupling = (c+hd+hr)*wn
-        return LocalTerms(intrinsic,field0,coupling,weights,burial)
+        return _local_terms(self._d,p,self.config)
 
     def local_terms(self):
         """Return a JIT-compiled P-only term inspector."""
         return jax.jit(self._local_terms)
 
     def _field(self, terms, h):
-        return terms.field0+jnp.einsum("nkgt,nkt->ng",terms.coupling,h[self._idx])
+        return _field(self._d,terms,h)
 
     def _solve(self, terms, ph):
-        log10 = jnp.log(jnp.asarray(10,dtype=terms.intrinsic.dtype))
-        def target(h):
-            return jnp.where(self._gm,jax.nn.sigmoid(log10*(terms.intrinsic-ph-self._field(terms,h))),0)
-        h = jnp.where(self._gm,jax.nn.sigmoid(log10*(terms.intrinsic-ph-terms.field0)),0)
-        def step(_, old):
-            return old+self.config.damping*(target(old)-old)
-        h = jax.lax.fori_loop(0,self.config.steps,step,h)
-        error = jnp.abs(target(h)-h)
-        return h,jnp.max(error),jnp.max(error*terms.weights)
+        return _solve(self._d,terms,ph,self.config)
 
     def curves(self, ph, residues=None):
         """Compile conditional occupancies and physical charges on a static pH grid."""
@@ -186,16 +255,11 @@ class TitrationModel:
         chain_onehot = jnp.asarray(np.eye(len(self.cache.chain_ids))[self.cache.chain_index])
         @jax.jit
         def evaluate(p):
-            terms = self._local_terms(p)
-            ph_array = jnp.asarray(grid,dtype=p.dtype)
-            h,residual,wresidual = jax.vmap(self._solve,in_axes=(None,0))(terms,ph_array)
-            charge = terms.weights[None,:,:]*(self._q0.astype(p.dtype)[None,None,:]+h)
-            residue_charge = charge.sum(-1)
-            effective = jax.vmap(lambda x:terms.intrinsic-self._field(terms,x))(h)
-            return CurveResult(ph_array,h[:,sel],charge[:,sel],residue_charge[:,sel],
-                               residue_charge@chain_onehot.astype(p.dtype),residue_charge.sum(-1),
-                               terms.weights[sel],terms.intrinsic[sel],effective[:,sel],
-                               residual,wresidual,residual<self.config.residual_tolerance)
+            out = curve_kernel(self._d,p,jnp.asarray(grid,dtype=p.dtype),config=self.config)
+            return CurveResult(out.ph,out.protonated[:,sel],out.site_charge[:,sel],out.residue_charge[:,sel],
+                               out.residue_charge@chain_onehot.astype(p.dtype),out.total_charge,
+                               out.probability[sel],out.intrinsic_pka[sel],out.effective_pka[:,sel],
+                               out.residual,out.weighted_residual,out.converged)
         return evaluate
 
     def charge(self, ph=7.0, residues=None):
@@ -305,34 +369,12 @@ class TitrationModel:
             raise ValueError("groups must be nonempty and unique")
         selected=self.cache.select(residues)
         group_indices=jnp.asarray(indices)
-        available=self._gm[jnp.asarray(selected)][:,group_indices]
-        curves=self.curves(grid,residues)
-        cfg=self.config
         @jax.jit
         def evaluate(p):
-            out=curves(p)
-            y=out.protonated[:,:,group_indices]
-            x=out.ph
-            # First sampled value <= 1/2; clamp supplies a safe interval for
-            # unbracketed and exact-lower-bound roots before applying masks.
-            upper=jnp.clip(jnp.argmax(y<=.5,axis=0),1,len(grid)-1)
-            lower=upper-1
-            y0=jnp.take_along_axis(y,lower[None,:,:],axis=0)[0]
-            y1=jnp.take_along_axis(y,upper[None,:,:],axis=0)[0]
-            width=x[upper]-x[lower]
-            delta=y1-y0
-            slope=delta/width
-            safe=slope < -cfg.slope_min
-            bracketed=available & (y[0]>=.5) & (y[-1]<=.5)
-            sampled_monotone=jnp.all(jnp.diff(y,axis=0)<=1e-6,axis=0)
-            good=bracketed & safe
-            value=x[lower]+(.5-y0)*width/jnp.where(safe,delta,-1)
-            residual=jnp.max(out.residual)
-            valid=good & sampled_monotone & jnp.all(out.converged)
-            return GridPkaResult(jnp.where(good,value,0),valid,bracketed,
-                                 out.probability[:,group_indices],slope,
-                                 jnp.where(bracketed,width,0),sampled_monotone,
-                                 jnp.broadcast_to(residual,value.shape))
+            out=grid_pka_kernel(self._d,p,jnp.asarray(grid,dtype=p.dtype),config=self.config)
+            if residues is None and groups is None:
+                return out
+            return jax.tree.map(lambda x:x[selected][:,group_indices],out)
         return evaluate
 
     def pka_sites(self, sites):
