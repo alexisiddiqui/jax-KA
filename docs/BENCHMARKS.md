@@ -35,6 +35,77 @@ Direct all-site midpoints are expensive because each query needs repeated full-e
 
 Synthetic graphs demonstrate execution and give reproducible microbenchmark inputs; they do not establish relative performance against PROPKA, realistic protein memory requirements, GPU throughput, or scientific accuracy.
 
+## Performance tuning
+
+The dominant cost is the repeated global occupancy solve, not Python dispatch.
+For `N` residues, interaction capacity `Kc`, nine titration channels, `T`
+occupancy iterations, `H` sampled pHs, `B` bisection steps, and `Q` direct
+midpoint queries, the leading work is approximately:
+
+| Operation | Leading cost |
+|---|---|
+| Single-pH charge | `O(T N Kc 9^2)` |
+| Curves or shared-grid pKas | `O(H T N Kc 9^2)` |
+| Direct midpoint queries | `O(Q B T N Kc 9^2)` |
+
+The sequence-dependent terms also contract all 20 candidate identities over the
+environment graph. This is intentional: a soft sequence retains conditional
+states for identities that are absent from a particular hard sequence. It also
+means that a differentiable evaluation does substantially more work than a
+single-hard-sequence reference calculation.
+
+Apply the following changes in roughly this order:
+
+1. Keep all-site direct roots out of an optimization loop. Prefer charge or curve
+   objectives when they express the design goal. When midpoint pKas are required,
+   `pka_from_grid()` shares each pH solve across every site. Validate the chosen
+   grid against direct roots on representative hard and soft sequences because
+   its interpolation is an explicit numerical approximation.
+2. Request only necessary direct roots with `pka_sites()`. `pka()` without a
+   selection requests all `N x 9` conditional roots, including alternative
+   identities. Selecting residues reduces `Q` for direct roots, but it does not
+   shrink the global electrostatic environment solved for each query.
+3. Tune `ModelConfig.steps` using residuals and output comparisons. Runtime is
+   approximately linear in this fixed iteration count. Sweep lower values on the
+   actual design distribution and retain the smallest value that preserves
+   convergence, values, and gradients. Strongly coupled cases may require more
+   than the default 64, so this is not a universally safe reduction.
+4. Tune `root_steps` for direct pKas. The default 28 bisections over the default
+   34-pH-unit interval give a nominal final width of about `1.3e-7`; 21 steps give
+   about `1.6e-5`. A smaller count can remove a meaningful fraction of direct-root
+   work, but it must be checked against crossing error, validity, and pKa/gradient
+   regressions rather than chosen from interval width alone.
+5. Construct each JIT readout once and reuse it. Save and reload `StructureCache`
+   objects when a structure is reused, warm compiled functions before timing, and
+   keep preprocessing and compilation outside an optimization loop.
+6. Tune `root_batch_size` per device. Larger chunks may improve accelerator
+   utilization while increasing working memory; smaller chunks reduce peak
+   occupancy storage. Batch independent sequences with `jax.vmap` when throughput
+   matters, especially on an accelerator where a single small protein may not
+   provide enough parallel work.
+7. Control padding. Real candidate-union graphs can have much larger `Ke` and
+   `Kc` than the `8/9` synthetic graphs above. Padding every structure to a large
+   bucket increases all contractions, so use buckets tight enough to avoid large
+   amounts of inactive work while still reusing compilation.
+
+Gradient workloads require separate memory measurements. In the `N=64`
+benchmark, the compiler estimated about 114 MB of temporary storage for the
+grid-pKa value-and-gradient function, compared with about 2.6 MB for its forward
+function. Reverse mode differentiates the finite unrolled occupancy iterations.
+If this becomes the limiting resource, `jax.remat` can exchange recomputation for
+activation memory. Implicit differentiation of the converged fixed point could
+reduce the dependence on the unrolled history, but it would be a larger numerical
+change and would require convergence and gradient validation.
+
+The main longer-term kernel target is the padded dense `[N,Kc,9,9]` coupling
+representation. Packed active type edges, degree-based buckets, or a factored
+interaction kernel could reduce work for high-degree proteins. Sparse scatter or
+segment reductions are not automatically faster on every backend, so compare
+compiled memory and synchronized execution before adopting such a representation.
+Convergence acceleration, such as pH warm starts or Anderson/Newton-style updates,
+could also lower `T`, but may change the fixed-point branch reached by the model
+and therefore crosses a scientific validation boundary.
+
 ## Reproduction
 
 ```bash
