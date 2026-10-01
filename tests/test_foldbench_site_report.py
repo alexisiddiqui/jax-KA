@@ -94,7 +94,9 @@ def test_evaluate_retries_and_preserves_partial_reference(monkeypatch, reference
     def run_reference(*args, **kwargs):
         if reference_failure:
             raise RuntimeError("mock reference failure")
-        return SimpleNamespace(sites=[reference.ReferenceSite(keys[0], "ASP", 6.5)], provenance={"version": "test"})
+        return SimpleNamespace(sites=[reference.ReferenceSite(keys[0], "ASP", 6.5)], provenance={"version": "test"},
+                               excluded_sites=({'residue':{'chain':'A','number':2,'insertion':''},
+                                                'group':'GLU','reason':'propka_covalent_coupling_suppression'},))
 
     monkeypatch.setattr(model, "curve_kernel", curve)
     monkeypatch.setattr(reference, "write_reference_structure", lambda *args: {})
@@ -116,3 +118,4 @@ def test_evaluate_retries_and_preserves_partial_reference(monkeypatch, reference
         assert result["compared_sites"] == 1
         assert result["sites"][0]["delta"] == pytest.approx(.5)
         assert result["charge_metrics"]["sites"] == 1
+        assert result["sites"][1]["reference_status"] == 'excluded_covalent_coupling'

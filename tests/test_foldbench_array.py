@@ -24,3 +24,13 @@ def test_array_rows_are_disjoint_and_cover_manifest():
 def test_invalid_index_is_rejected(index):
     with pytest.raises(ValueError, match="outside manifest"):
         foldbench._select_case([{"pdb_id": "a"}, {"pdb_id": "b"}], index)
+
+
+def test_unsupported_inputs_are_separate_from_solver_failures():
+    error=ValueError("missing backbone at A:1: ['CA']")
+    assert foldbench._failure_status('topology',error,True)=='excluded_input'
+    assert foldbench._failure_status('topology',error,False)=='failed'
+    assert foldbench._failure_status('site_report',error,True)=='failed'
+    summary=foldbench._summary([{'status':'excluded_input','stage':'topology'}],1)
+    assert summary['excluded_input_cases']==1
+    assert summary['failed_cases']==0

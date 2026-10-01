@@ -38,6 +38,11 @@ def test_reference_hh_charges():
     assert np.all(np.diff(q,axis=0)<=0)
 
 
+def test_four_digit_reference_labels_without_separator():
+    sites=parse_pka('SUMMARY OF THIS PREDICTION\n ASP1000 A 3.80 3.80\n LYS9999 B 10.50 10.50\n')
+    assert [(s.key.number,s.group) for s in sites]==[(1000,'ASP'),(9999,'LYS')]
+
+
 def test_baseline_rejects_drift_and_reference_changes():
     report={'reference':{'version':'parser-test'},'cache_fingerprint':'test','model_config':{},
             'sites':[{'residue':{'chain':'A','number':1,'insertion':''},'group':'ASP','surrogate_pka':4.,'reference_pka':3.8}],

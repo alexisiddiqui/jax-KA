@@ -6,7 +6,7 @@ import numpy as np
 
 
 POLICY = {
-    "version": "site-report-v1",
+    "version": "site-report-v2",
     "retry_steps": 512,
     "refinement_factor": 4,
     "strict": "sampled monotonicity, bracket, unique safe crossing, all-group convergence on every evaluated grid",
@@ -218,7 +218,8 @@ def evaluate(arrays, probabilities, cache, topology, candidates, full_atoms,
                      "surrogate_pka": chosen["value"] if tier != "invalid" else None,
                      "refinement_shift": (refined["value"] - coarse_row["value"]
                          if refined and refined["value"] is not None and coarse_row["value"] is not None else None),
-                     "reference_pka": None, "delta": None, "reference_missing": True})
+                     "reference_pka": None, "delta": None, "reference_missing": True,
+                     "reference_status": "unexpected_missing"})
     # Preserve solver diagnostics even if structural annotation/reference fails.
     annotation_error = None
     try:
@@ -237,16 +238,24 @@ def evaluate(arrays, probabilities, cache, topology, candidates, full_atoms,
             reference_input_audit = audit_reference_input(path, topology, candidates, mapping)
             reference = run_reference(path, backend="modern", mapping=mapping)
         lookup = {(site.key, site.group): site for site in reference.sites}
+        exclusions = {(tuple(sorted(s["residue"].items())), s["group"]): s
+                      for s in getattr(reference, "excluded_sites", ())}
         for row, (index, group) in zip(rows, expected):
             site = lookup.get((cache.keys[index], group))
             if site is not None:
-                row.update(reference_pka=float(site.pka), reference_missing=False)
+                row.update(reference_pka=float(site.pka), reference_missing=False, reference_status="available")
                 if row["tier"] != "invalid":
                     row["delta"] = row["surrogate_pka"] - float(site.pka)
                     matched_sites.append(site)
                     matched_indices.append((index, GROUPS.index(group)))
+            elif (tuple(sorted(row["residue"].items())), group) in exclusions:
+                row["reference_status"] = "excluded_covalent_coupling"
+                row["reference_exclusion"] = exclusions[tuple(sorted(row["residue"].items())), group]
     except Exception as error:
         reference_error = repr(error)
+        for row in rows:
+            if row["reference_missing"]:
+                row["reference_status"] = "reference_run_failed"
 
     charge_report = {"scope": "matched eligible sites only; not whole-protein total", "sites": len(matched_sites)}
     if matched_sites:
@@ -287,7 +296,7 @@ def summarize(cases):
                 "max_abs": float(np.abs(delta).max()) if len(delta) else None}
 
     strata = {}
-    for field in ("tier", "group", "exposure", "context_cohort"):
+    for field in ("tier", "group", "exposure", "context_cohort", "reference_status"):
         strata[field] = {value: stats([s for s in rows if s.get(field, "unknown") == value])
                          for value in sorted({s.get(field, "unknown") for s in rows})}
     return {"overall": stats(rows), "strata": strata,

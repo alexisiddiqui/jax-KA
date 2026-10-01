@@ -44,3 +44,25 @@ def test_real_metal_targets_have_matched_exclusions(tmp_path, pdb_id):
     path.write_text("".join(lines))
     with pytest.raises(ValueError, match="element mismatch"):
         audit_reference_input(path, topology, candidates, mapping)
+
+
+@pytest.mark.parametrize('pdb_id',['8bux-assembly1','8qb1-assembly1'])
+def test_real_gap_termini_match_propka_internal_groups(tmp_path,pdb_id):
+    from biotite.structure.io import pdbx
+    from propka.run import single
+    from jaxpropka.topology import load_topology
+    from jaxpropka.geometry import build_candidates
+    from jaxpropka.reference import write_reference_structure
+    archive_path=Path(__file__).resolve().parents[1]/'ground_truth_1522.tar'
+    if not archive_path.exists():
+        pytest.skip('local FoldBench archive is not installed')
+    with tarfile.open(archive_path) as archive:
+        member=next(m for m in archive.getmembers() if Path(m.name).name==pdb_id+'.cif')
+        cif=pdbx.CIFFile.read(io.StringIO(archive.extractfile(member).read().decode()))
+    atoms=pdbx.get_structure(cif,model=1,altloc='occupancy',use_author_fields=False,include_bonds=True)
+    topology=load_topology(atoms[atoms.chain_id=='A'],gap_policy='free',freeze_disulfides=True,ignore_nonprotein=True)
+    path=tmp_path/'reference.pdb'
+    mapping=write_reference_structure(topology,build_candidates(topology,missing_sidechain='template'),path)
+    molecule=single(path,write_pka=False)
+    actual={mapping[g.atom.chain_id,g.atom.res_num] for g in molecule.conformations['AVR'].groups if g.residue_type=='N+'}
+    assert actual=={topology.keys[i] for i in np.flatnonzero(topology.nterm)}

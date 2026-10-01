@@ -20,6 +20,13 @@ import numpy as np
 CAP_RESIDUES = frozenset({"ACE", "NME", "NH2", "FOR"})
 
 
+def _failure_status(stage: str, error: Exception, site_report: bool) -> str:
+    if site_report and stage == "topology" and str(error).startswith(
+            ("missing backbone", "unsupported terminal cap chemistry")):
+        return "excluded_input"
+    return "failed"
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -29,7 +36,7 @@ def sha256(path: Path) -> str:
 
 
 def _run_case(item: tuple[str, str, str], steps: int, grid_points: int,
-              bucket_multiple: tuple, *, site_report: bool = False) -> dict:
+              bucket_multiple: tuple, *, site_report: bool = False, partner_chains: tuple | None = None) -> dict:
     pdb_id, chain_id, cif_name = item
     result = {"pdb_id": pdb_id, "chain_id": chain_id}
     case_started = time.perf_counter()
@@ -75,7 +82,11 @@ def _run_case(item: tuple[str, str, str], steps: int, grid_points: int,
             from analyze_foldbench_context import CANONICAL, WATER
             result["full_model_nonprotein_residue_names"] = sorted(
                 set(map(str, atoms.res_name)) - CANONICAL - WATER)
-        atoms = atoms[np.asarray(atoms.chain_id) == chain_id]
+        selected_chains=(chain_id,) if partner_chains is None else partner_chains
+        if len(set(selected_chains))!=len(selected_chains):raise ValueError('duplicate selected chains')
+        if not set(selected_chains)<=set(map(str,atoms.chain_id)):
+            raise KeyError(f'missing requested label-asym chains: {selected_chains}')
+        atoms = atoms[np.isin(np.asarray(atoms.chain_id),selected_chains)]
         if len(atoms) == 0:
             raise KeyError(f"label-asym chain {chain_id!r} is absent")
 
@@ -138,6 +149,21 @@ def _run_case(item: tuple[str, str, str], steps: int, grid_points: int,
                                             "backend": jax.default_backend()}
             result.update(evaluate(arrays, probabilities, cache, topology, candidates,
                                    full_atoms, expected, config, grid_points))
+            if partner_chains is not None:
+                from interface_exposure import interface_rows, POLICY as INTERFACE_POLICY
+                result['site_policy']={**result['site_policy'],
+                    'exposure':'selected observed two-chain complex; isolated partners additionally annotated',
+                    'comparison_input':INTERFACE_POLICY['geometry']}
+                result['structure_branch_status']='not_assessed'
+                for row in result['sites']:row['structure_branch_status']='not_assessed'
+                try:
+                    annotations,interface=interface_rows(topology,expected)
+                    for row,annotation in zip(result['sites'],annotations):
+                        assert row['residue']==annotation['residue']
+                        row.update(annotation)
+                    result['interface']=interface
+                except Exception as error:
+                    result['interface_annotation_error']=repr(error)
             enter("complete")
             result["timing_seconds"] = {"stages": stage_seconds,
                                         "total": time.perf_counter() - case_started}
@@ -247,7 +273,7 @@ def _run_case(item: tuple[str, str, str], steps: int, grid_points: int,
         stage_seconds[stage] = now - stage_started
         return {
             **result,
-            "status": "failed",
+            "status": _failure_status(stage, error, site_report),
             "stage": stage,
             "error_type": type(error).__name__,
             "error": str(error),
@@ -274,6 +300,7 @@ def _summary(cases: list[dict], total: int) -> dict:
         "completed_cases": len(cases),
         "passed_cases": len(passed),
         "failed_cases": len(failed),
+        "excluded_input_cases": sum(case["status"] == "excluded_input" for case in cases),
         "partial_cases": sum(case["status"] == "partial" for case in cases),
         "failures_by_stage": dict(sorted(by_stage.items())),
         "compared_sites": int(deltas.size),
@@ -320,6 +347,7 @@ def main() -> None:
                         help="round residue/environment/pair capacities up to these multiples")
     parser.add_argument("--max-cases", type=int)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--branch-audits",type=Path,help="completed stability audits for explicit structure-level flags")
     args = parser.parse_args()
     if args.steps < 1 or args.grid_points < 2:
         parser.error("steps must be positive and grid-points must be at least two")
@@ -381,7 +409,17 @@ def main() -> None:
         document["policy"]["implementation_sha256"] = {
             name: sha256(Path(__file__).with_name(name))
             for name in ("regress_foldbench.py", "foldbench_site_report.py")}
+        document["policy"]["reference_adapter_sha256"] = sha256(
+            Path(__file__).resolve().parents[1] / "src/jaxpropka/reference.py")
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    branch_evidence=None
+    if args.branch_audits:
+        from branch_audit_flags import load_evidence
+        model_hash=sha256(Path(__file__).resolve().parents[1]/'src/jaxpropka/model.py')
+        branch_evidence,hashes=load_evidence(args.branch_audits,model_hash)
+        document['policy']['branch_audits']={'report_sha256':hashes,'model_sha256':model_hash,
+            'annotation_sha256':sha256(Path(__file__).with_name('branch_audit_flags.py')),
+            'action':'flag only; no branch selection; unaudited structures explicitly not_assessed'}
     if args.resume and args.output.exists():
         previous = json.loads(args.output.read_text())
         if previous.get("dataset") != document["dataset"]:
@@ -416,6 +454,9 @@ def main() -> None:
         order = {row["pdb_id"]: index for index, row in enumerate(rows)}
 
         def record(result: dict) -> None:
+            if branch_evidence is not None:
+                from branch_audit_flags import annotate
+                result=annotate(result,branch_evidence)
             document["cases"].append(result)
             document["cases"].sort(key=lambda case: order[case["pdb_id"]])
             document["timing_seconds"]["case_execution"] = time.perf_counter() - case_execution_started

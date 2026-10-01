@@ -36,13 +36,17 @@ class ReferenceRun:
     output_text: str
     stdout: str
     elapsed_seconds: float
+    excluded_sites: tuple[dict, ...] = ()
 
 
 def write_reference_structure(topology, candidates, path, sequence_indices=None):
     """Export the SAME frozen native/mutant candidate coordinates used by the model.
 
     Every peptide segment receives a unique short PDB chain code and every
-    residue a consecutive number. A bijective map restores original multichar
+    residue a globally unique consecutive number. PROPKA 3.5.1's terminal
+    detection compares residue numbers without chain identity after OXT;
+    restarting numbering at 1 misassigns termini after one-residue segments.
+    A bijective map restores original multichar
     chain IDs, arbitrary numbering and insertion codes after PROPKA parsing.
     This prevents legacy PDB label limitations from conflating residues.
     """
@@ -64,7 +68,7 @@ def write_reference_structure(topology, candidates, path, sequence_indices=None)
     records=[];mapping={};segment=-1;number=0
     for i,key in enumerate(topology.keys):
         if topology.previous[i]<0:
-            segment+=1;number=0
+            segment+=1
         if segment>=len(codes):
             raise ValueError("legacy PDB reference adapter supports at most 62 segments")
         number+=1
@@ -93,7 +97,8 @@ def write_reference_structure(topology, candidates, path, sequence_indices=None)
 
 def parse_pka(text, mapping=None):
     """Parse summary values, not determinant contributions or repeated profiles."""
-    pattern=re.compile(r"^\s*(ASP|GLU|HIS|CYS|TYR|LYS|ARG|N\+|C-)\s+(-?\d+)\s+([A-Za-z0-9])\s+([-+]?\d+(?:\.\d+)?)")
+    # PROPKA's fixed-width labels have no separating space at residue 1000+.
+    pattern=re.compile(r"^\s*(ASP|GLU|HIS|CYS|TYR|LYS|ARG|N\+|C-)\s*(-?\d+)\s+([A-Za-z0-9])\s+([-+]?\d+(?:\.\d+)?)")
     active=False;sites=[];seen=set()
     for line in text.splitlines():
         if "SUMMARY OF THIS PREDICTION" in line.upper():
@@ -148,7 +153,14 @@ def run_reference(path, *, backend="modern", legacy_root=None, mapping=None,
         except importlib.metadata.PackageNotFoundError as exc:
             raise RuntimeError("install the reference extra for modern PROPKA") from exc
         provenance.update(version=version,subversion="modern package default; NOT PROPKA 3.0")
-        command=[sys.executable,"-c","import sys; from propka.run import single; single(sys.argv[1], write_pka=True)"]
+        command=[sys.executable,"-c", "\n".join([
+            "import sys, json",
+            "from pathlib import Path",
+            "from propka.run import single",
+            "m = single(sys.argv[1], write_pka=True)",
+            "excluded = [{'chain': g.atom.chain_id, 'number': g.atom.res_num, 'group': g.residue_type, 'coupled_label': g.coupled_titrating_group.label} for g in m.conformations['AVR'].groups if g.coupled_titrating_group and m.version.parameters.remove_penalised_group]",
+            "Path('excluded.json').write_text(json.dumps(excluded))",
+        ])]
     else:
         raise ValueError("backend must be legacy30 or modern")
     with tempfile.TemporaryDirectory(prefix="jaxpropka-reference-") as directory:
@@ -162,7 +174,15 @@ def run_reference(path, *, backend="modern", legacy_root=None, mapping=None,
         if len(files)!=1:
             raise RuntimeError(f"expected one .pka file, got {files}; stdout:\n{run.stdout[-2000:]}")
         text=files[0].read_text()
-    return ReferenceRun(parse_pka(text,mapping),provenance,text,run.stdout+run.stderr,elapsed)
+        excluded=[]
+        if backend == "modern":
+            for entry in json.loads((work/"excluded.json").read_text()):
+                pair=(entry["chain"],entry["number"])
+                key=mapping[pair] if mapping is not None else ResidueKey(*pair)
+                excluded.append({"residue":asdict(key),
+                    "group":{"N+":"NTERM","C-":"CTERM"}.get(entry["group"],entry["group"]),
+                    "reason":"propka_covalent_coupling_suppression", "coupled_reference_label":entry["coupled_label"]})
+    return ReferenceRun(parse_pka(text,mapping),provenance,text,run.stdout+run.stderr,elapsed,tuple(excluded))
 
 
 def reference_charge(sites, ph):
