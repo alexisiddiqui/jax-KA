@@ -6,6 +6,9 @@ identical reimplementation of PROPKA's coupled determinant algorithm.
 from .cache import ResidueKey, StructureCache
 from .model import TitrationModel, CurveResult, PkaResult, GridPkaResult, one_hot
 from .parameters import ALPHABET, GROUPS, ModelConfig
+from .differentiation import DifferentiationConfig, EquilibriumConfig, SolverDiagnostics
+from .audit import EquilibriumAudit, audit_equilibrium
+from .selectivity import SelectivityObjective, SelectivityResult, SelectivityGradient
 
 __version__ = "0.1.0"
 

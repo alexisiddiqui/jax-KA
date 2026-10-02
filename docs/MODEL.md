@@ -70,6 +70,12 @@ This is a new mean-field energy model; replacing the original determinant logic 
 
 ## Fixed-iteration solve and gradients
 
+The ordinary API keeps its exact iteration budget. The opt-in design preset
+instead uses `ModelConfig.steps` as a cap for adaptive equilibrium solving,
+requires consecutive successful full-state residual checks, and uses implicit
+derivatives. Its numerical validity does not imply branch consistency; branch
+audits remain explicit. See [the design preset](GRADIENTS.md#opt-in-cpu-design-preset).
+
 At each pH:
 
     target(h) = sigmoid(ln(10) * (intrinsic_pKa - pH - Phi(h)))
@@ -79,13 +85,13 @@ The default is 64 parallel updates with alpha=0.35. `lax.fori_loop` has a Python
 
 The returned residual is max(abs(target(h)-h)), not the difference between damped iterates. A probability-weighted residual is also returned, but validity uses the full conditional-state residual. A small damped step alone is not evidence of convergence.
 
-Autodiff of charge and curves differentiates the finite-iteration algorithm. A fixed cap, damping and smooth gates do not guarantee a unique equilibrium or convergence for strong interactions. Compare iteration counts and residuals in the actual design regime. There is no implicit differentiation of the equilibrium equations in this version.
+Default autodiff of charge and curves differentiates the finite-iteration algorithm. Opt-in checkpointing preserves that derivative while reducing retained intermediates. Opt-in implicit differentiation instead differentiates the locally selected equilibrium and requires successful forward and linear solves; it does not change the forward iteration schedule or select a preferred branch. See [gradient modes and selectivity objectives](GRADIENTS.md). A fixed cap, damping and smooth gates do not guarantee a unique equilibrium or convergence for strong interactions. Compare iteration counts and residuals in the actual design regime.
 
 Direct midpoint pKa solves h_i(P,pH)=0.5 with a static number of bisection iterations over configured pH bounds. A custom JVP implements
 
     d(pKa) = -(partial h_i / partial P)[dP] / (partial h_i / partial pH),
 
-where both partials differentiate the **finite-iteration** occupancy function. Forward- and reverse-mode are supported. The derivative is not obtained from the discrete bisection decisions. Bisection history is not retained for its reverse derivative; ordinary unrolled occupancy differentiation still has activation-memory costs.
+where both partials use the selected occupancy differentiation mode: **finite-iteration** by default, or the local equilibrium derivative when implicit mode is explicitly selected. Forward- and reverse-mode are supported. The derivative is not obtained from the discrete bisection decisions. Bisection history is not retained for its reverse derivative; ordinary unrolled occupancy differentiation still has activation-memory costs.
 
 Validity checks include bracketing, negative non-flat local slope, crossing error and fixed-point residual. They do not establish global uniqueness or choose a globally minimal free-energy branch. Unbracketed/flat roots have safe masked derivatives; a numerically returned root on a nonconverged branch may still have a derivative but must not be used as a valid pKa. Boolean validity is a diagnostic, not a smoothly differentiable loss constraint.
 
@@ -108,6 +114,6 @@ For A=20, G=9, T occupancy iterations, H sampled pHs and Q direct midpoint queri
 
 All-site direct roots have Q proportional to N and are not the same sparse-linear cost as one charge evaluation. They can be expensive; query selected sites or use the validated grid approximation in a design loop. The root mapper's static batch size bounds its primal occupancy working batch. It does not promise constant total reverse-mode memory.
 
-Ke/Kc can be large for compact structures and long candidate reaches. Dense type blocks are retained in the structural cache for correctness, and memory can still become substantial without an atom axis. `TitrationModel(cache, backend="packed")` opt-in packs every active fixed-geometry type edge for the repeated occupancy field contraction; it does not prune hypothetical sequence identities or change the equations. The default remains `backend="dense"` pending full-panel regression and device-specific validation. Multiple rotamers, sequence-conditioned candidate weights, calibrated H-bond exceptions and a faithful determinant-mode implementation are not provided here.
+Ke/Kc can be large for compact structures and long candidate reaches. Dense type blocks are retained in the structural cache for correctness, and memory can still become substantial without an atom axis. `TitrationModel(cache, backend="packed")` opt-in packs every active fixed-geometry type edge for the repeated occupancy field contraction; it does not prune hypothetical sequence identities or change the equations. The default remains `backend="dense"` pending a backend-independent branch-stability guard and device-specific validation. Multiple rotamers, sequence-conditioned candidate weights, calibrated H-bond exceptions and a faithful determinant-mode implementation are not provided here.
 
 Use charge/curve objectives where appropriate, enforce required identities explicitly, discretize candidate designs, and rescore them with an external reference on an appropriate repacked structure. This model alone is not a folding energy, structural validity check or experimentally calibrated inverse-folding objective.

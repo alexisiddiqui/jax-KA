@@ -23,6 +23,47 @@ The included benchmark reports preserve the earlier benchmark environment and pa
 
 The source-distribution wheel was built, and the source tree was byte-compiled. Packaging and synthetic execution do not validate the molecular implementation.
 
+## Memory-efficient gradient implementation (CPU)
+
+The expanded CPU suite, including three benchmark-reporting tests, passes
+**168 tests**, with five external-reference/MPS tests deselected
+(`pytest -m 'not reference and not mps'`). This run uses Python 3.12 and JAX
+0.11.1; it does not replace the historical external-reference or MPS results.
+
+New coverage includes finite-iteration checkpoint/remainder parity, packed-edge
+local terms and masked padding, float32/float64 sequence gradients, implicit
+JVP/VJP/directional finite differences, failed primal/adjoint solves, absence of
+an iteration-by-edge reverse tape, residue-key mapping, pH chunking, composition
+with softmax, and bound/free scalar-gradient equivalence. Experimental endpoint
+tests cover stationarity, baseline charge, quadrature refinement, envelope
+gradients and continuation-path diagnostics. The reporting checks prevent
+saturated softplus losses from hiding selectivity-gradient errors.
+
+Protein–protein scaling and the four archived reduction-order-sensitive cases
+are documented in [BENCHMARKS.md](BENCHMARKS.md). These are numerical and
+performance checks, not experimental calibration or evidence of a unique
+equilibrium branch. New accelerator execution remains unvalidated.
+
+## Adaptive design-preset coverage (CPU)
+
+The expanded suite passes **181 tests**, with five reference/MPS tests deselected.
+The additional coverage checks the unchanged ordinary defaults, adaptive
+stopping and exact caps, consecutive-check requirements, nonfinite detection,
+independent batched stopping, JVP/VJP/finite-difference agreement, batched
+sequence gradients, direct midpoints (including unusable gradients on failed
+solves), streamed diagnostics, experimental endpoint consistency, and an
+explicit multistart audit that detects a constructed multiple-solution case.
+Promotion-report tests reject incomplete, stale or invalid measurements.
+
+The CPU protein–protein promotion panel is separate from these unit tests and
+from the historical packed-backend panel. It uses 260 eligible interfaces for
+forward checks, a deterministic 24-interface gradient subset, and five scaling
+interfaces. Numerical convergence, sampled-path consistency and derivative
+agreement are separate outcomes. A failed audit can reflect finite-solve error
+or distinct branches; it does not identify the cause or select an equilibrium.
+See [the design preset](GRADIENTS.md#opt-in-cpu-design-preset) for the API and
+explicit-audit contract. Ordinary package defaults remain unchanged.
+
 ## Hardware-specific execution
 
 **One MPS forward/reverse/midpoint test** executes on the Metal device with CPU fallback disabled. CUDA execution and accelerator performance benchmarking have not yet been established.

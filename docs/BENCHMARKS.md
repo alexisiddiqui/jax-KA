@@ -260,3 +260,175 @@ execution times, convergence diagnostics, and parity differences. Inputs are
 the corresponding `interfaces/724720/report-{index}.json` reports; the rebuilt
 structure cache fingerprint must match the original. The extended run enables
 `--wide-native-check`; the initial pilot did not include that option.
+
+## Packed interaction protein–protein regression (2026-10-02)
+
+This is a partial-by-request regression against the accepted dense reports from
+interface panel 724720. Nineteen input exclusions had no numerical cache; 259 of
+260 eligible pairs completed, and the remaining 1,708-residue `8ic7 A/B` case was
+stopped during cache construction. Each completed case rebuilt and fingerprinted
+the exact cache, then ran dense and packed kernels over the accepted adaptive
+schedule. Jobs used eight CPU cores and 32 GiB. The comparison includes first
+compilation/execution but excludes cache construction and PROPKA, which is
+unchanged by the interaction representation.
+
+| Outcome | Pairs |
+|---|---:|
+| Manifest | 279 |
+| Input exclusions | 19 |
+| Numerically completed | 259 |
+| Passed every parity gate | 255 |
+| Failed at least one gate | 4 |
+| Stopped/incomplete | 1 |
+
+Across the 259 completed pairs, 703/708 solver-grid comparisons passed every
+gate. All **165/165** pairs previously classified `passed` retained parity.
+Among accepted `partial` cases, 86/87 passed; among accepted numerical failures,
+4/7 passed. Thus no previously accepted-passed structure acquired a numerical,
+convergence, site-category, or final-tier regression.
+
+The four flagged pairs separate into three categories:
+
+| Pair | Accepted state | Observation | Interpretation |
+|---|---|---|---|
+| `8kbm A/A-2` | failed | Refined-grid occupancy max difference `2.074e-5`, just over the `2e-5` gate; charges, convergence flags, site categories, and all final tiers agree. | Tolerance-edge mismatch, not an outcome change. |
+| `8qvc A/A-2` | partial | 128-step coarse occupancy difference `3.698e-5`; the 512-step coarse and refined grids pass, and all final tiers agree. | Transient finite-iteration mismatch that disappears after the accepted retry. |
+| `9c90 A/A-2` | failed | Both schedules remain globally invalid, but convergence flags differ at some pHs; maximum occupancy difference `0.0131`. All final tiers remain invalid. | Pre-existing nonconvergent, order-sensitive solve; no usable-result change. |
+| `8kck A/A-2` | failed | At 128 steps, max occupancy/charge/pKa differences are `0.0700`, `0.0174`, and `0.0229`; differences shrink at 512 steps but convergence/category flags differ. Dense marks all 88 sites invalid, while packed marks 84 strict and 4 invalid. | Substantive branch/convergence sensitivity. Packed convergence cannot be treated as evidence of a unique equilibrium. |
+
+`8kck` is the only completed pair with changed final tiers and the only one with
+a changed site category. Its change is structure-global: the dense policy rejects
+every site because the coupled solve is nonconvergent, whereas a floating-point
+reduction-order change lets the packed iteration reach a converged branch for
+most sites. This is not evidence that packed is scientifically better; it exposes
+the known fact that small residuals do not establish branch uniqueness.
+
+### Panel timing
+
+| Grid | Comparisons | Median dense/packed ratio | Aggregate dense/packed ratio |
+|---|---:|---:|---:|
+| Charge, 15 pHs | 252 | 2.92x | 3.97x |
+| Coarse, 145 pHs | 301 | 1.46x | 1.63x |
+| Refined, 577 pHs | 155 | 1.24x | 1.23x |
+| All completed schedules | 708 | 1.52x | 1.39x |
+
+These cold/report-run speedups are intentionally more conservative than the warm
+pilot timings. They include compilation and sequence-dependent dense local-term
+construction, and cover heterogeneous graph densities. They are not timings of
+the final three-environment bound/free loss or its gradient.
+
+### Decision
+
+The packed representation is accepted as an **opt-in execution backend** for
+development and design profiling: its equations are shared with dense, gradients
+passed the dedicated real/synthetic checks, and all accepted-passed interface
+cases retained parity. It is **not accepted as the unconditional default** under
+the fail-closed gate. Before default promotion, the solver needs a
+backend-independent branch-stability guard (for example, multiple initial states
+or pH histories) and final discrete designs should be audited independently.
+Merely falling below the residual tolerance in the packed kernel is insufficient,
+as demonstrated by `8kck`.
+
+Raw reports and the corrected partial summary are under workspace root:
+`_runtime/jax-Ka/cuda12/benchmarks/packed-panel/interface-full/`. The summary's
+`acceptance_passed` is deliberately false because four strict gates failed and
+one requested case was stopped.
+
+## Memory-efficient gradients: CPU protein–protein scaling
+
+The new gradient paths are opt-in; dense/unrolled defaults and the preceding
+packed-panel decision are unchanged. See [GRADIENTS.md](GRADIENTS.md) for API
+usage and failure semantics. The reference is the original packed implementation
+at `df5abd608cbb3c92a7e1a0097ed19f38cf2d19fb`, not a rewritten surrogate baseline.
+
+Four representative physical interfaces were prepared as separate complex,
+binder and target environments. Fresh-process CPU measurements use JAX 0.11.1,
+float32, four allocated CPU threads, 128 forward iterations and 15 pHs from 6.0
+to 7.4. Binder probabilities are 0.05 and 0.001 uniform/native mixtures; target
+sequence probabilities are fixed. Full-objective comparisons use the original
+public P-only curve readouts versus the new P-only streamed objective, with the
+isolated target cached outside differentiation in both. Complex-only comparisons
+use dynamic-runtime curve kernels in both. Compilation and one warm-up precede
+five synchronized timings per mixture. Jobs ran on different CPU hosts, so
+timings are descriptive rather than controlled hardware speedup guarantees.
+
+### Full bound/free loss-gradient temporary storage
+
+These are **compiler-estimated temporary bytes**, in decimal MB, not total
+process/device memory. The checkpointed column uses legacy packed local terms
+with streamed pHs; packed_v2 also constructs active-edge local terms and tiles
+environment contractions. Both columns differentiate the finite iteration
+algorithm. Implicit differentiates the converged local fixed point.
+
+| Interface | Residues | Original packed | Checkpointed | packed_v2 + checkpointed | packed_v2 + implicit |
+|---|---:|---:|---:|---:|---:|
+| 8srz A/B | 176 | 1,403.2 | 80.5 | 19.6 | 20.0 |
+| 8jdh A/B | 289 | 2,357.0 | 157.3 | 39.1 | 39.7 |
+| 7zhf A/A-2 | 500 | 5,522.6 | 1,057.3 | 87.7 | 83.3 |
+| 8r7i A/A-2 | 1,254 | 17,124.0 | 5,486.6 | 272.8 | 273.1 |
+
+For the 1,254-residue full objective, packed_v2/checkpointing reduces temporary
+storage **62.8x**. Warm median times across the two mixtures are 15.41 seconds
+for original packed, 17.11–17.40 seconds for packed_v2/checkpointed, and
+5.09–5.33 seconds for implicit. Checkpointing is a memory/time tradeoff, not a
+universal speedup. Fresh-process peak RSS is 32.50 GiB for original packed,
+27.28 GiB for packed_v2/checkpointed and 27.46 GiB for implicit: host caches,
+captured geometry constants and compilation still dominate process memory.
+The temporary-storage reduction must not be reported as an equal RSS reduction.
+
+The unstreamed 1,254-residue complex curve-gradient kernel drops from 11.887 GB
+to 2.301 GB of temporary storage with packed_v2/checkpointing, a **5.17x**
+reduction. This isolates the kernel improvement from the larger gain obtained
+by streaming the scalar bound/free objective.
+
+Increasing the iteration count from 128 to 512 on this case leaves values and
+gradients unchanged at the measured precision. The complex-gradient baseline's
+temporary storage grows to 35.855 GB, versus 2.317 GB with packed_v2/checkpointing
+and 2.604 GB with implicit differentiation. The streamed packed_v2 objective's
+temporary storage stays at 272.8 MB (checkpointed) or 273.1 MB (implicit), versus
+52.223 GB for the original full-objective baseline at 512 iterations.
+
+### Optional 1,708-residue stress case: not converged
+
+`8ic7 A/B` completes the complex-only memory measurement, but is **not a usable
+equilibrium result** at 128 iterations. Original and new packed paths both have
+maximum residuals around `3.5e-4` and `7.2e-4` for the two mixtures, above the
+required tolerances. The finite-iteration outputs, gradients and convergence
+flags still match. Implicit mode deliberately returns nonfinite gradients.
+
+Original/new-checkpointed temporary storage is 17.401/3.306 GB; these numbers
+describe execution capacity only, not an accepted converged performance win.
+The required four-case panel passes, but the aggregate report's all-case
+`acceptance_passed` remains false when this invalid optional case is included.
+No automatic iteration increase or derivative fallback was used.
+
+### Numerical gates and scope
+
+All four scaling cases pass original-packed value, gradient and convergence-flag
+comparisons for both complex-only and full-objective workloads, in both mixtures.
+Comparisons also undo the known softplus scalar derivative in float64 to check
+the underlying selectivity/logit gradient: a saturated loss alone is not a
+meaningful absolute-gradient accuracy test. Forward and adjoint validity are
+required; invalid implicit solves cannot count as performance wins.
+
+All four archived sensitive cases (`8kbm`, `9c90`, `8kck`, `8qvc`) pass the new
+finite-iteration paths against the original **packed** backend at their archived
+sensitive schedules. This preserves, rather than erases, the historical
+dense-versus-packed branch/convergence discrepancies above.
+
+The experimental endpoint/envelope objective passes a separate float64 audit
+on the 176-residue interface at 512 iterations. Both mixtures have consistent
+independent/increasing/decreasing-pH paths, directional finite-difference
+agreement, and endpoint-versus-quadrature selectivity error decreasing from
+`1.66–1.69e-4` at 15 pHs to `1.99–2.02e-6` at 129 pHs. Fine-grid loss-gradient relative
+L2 errors are below `6.4e-6`. This does not certify a global equilibrium branch
+or validate the endpoint approximation on every scaling example.
+
+Raw fresh-process JSON, gradient arrays, cache fingerprints and preparation
+timings are under workspace root
+`_runtime/jax-Ka/cuda12/benchmarks/gradient-memory/`. Baseline provenance is
+tracked in `reports/gradient_memory_provenance.json`; the portable aggregate,
+test counts, source hashes and iteration checks are in
+[gradient_memory_cpu.json](../reports/gradient_memory_cpu.json). CPU unit/gradient coverage
+is detailed in [VALIDATION.md](VALIDATION.md). CUDA/MPS memory and throughput
+for these new paths have not been measured.

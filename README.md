@@ -92,7 +92,7 @@ value, gradient = jax.jit(jax.value_and_grad(loss))(logits)
 
 `backend="packed"` retains every active hypothetical identity edge and changes
 only the repeated interaction-field contraction. The dense backend remains the
-default while full-panel CPU regression and accelerator validation are pending.
+default pending a backend-independent branch-stability guard and accelerator validation.
 Packing is performed once when the model is constructed and is reused by charge,
 curve, grid-pKa, and direct-root readouts.
 
@@ -241,6 +241,13 @@ jaxpropka predict complex.npz --pka --residues 1,3,6,8 --output prediction.npz
 Benchmarks separate host preprocessing, compilation and synchronized warm device execution. Charge, curves, selected direct pKas, all-grid pKas and sequence batching have distinct timings. `--all-pka` explicitly enables the much more expensive all-channel direct-root benchmark. Compiled temporary-memory estimates are reported where supported; they are not physical peak accelerator allocation measurements.
 
 [Benchmark results](docs/BENCHMARKS.md) and [validation inventory](docs/VALIDATION.md) describe what was actually executed. Included GitHub workflows are configurations to run after pushing this repository, **not a claim of completed CI runs**. The original-3.0 workflow requires an explicit reviewed commit.
+
+For opt-in checkpointing, fully packed local terms, implicit derivatives and
+streamed bound/free objectives, see [memory-efficient gradients](docs/GRADIENTS.md).
+Existing backend and derivative defaults are unchanged.
+`TitrationModel.for_design(cache)` additionally offers an experimental CPU design
+preset with bounded adaptive equilibrium solving and explicit branch audits;
+its promotion status is described in the same guide.
 
 ## Layout
 

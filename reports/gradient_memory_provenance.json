@@ -1,0 +1,16 @@
+{
+  "baseline_commit": "df5abd608cbb3c92a7e1a0097ed19f38cf2d19fb",
+  "baseline_model_sha256": "55b732c939b19bff162ce0ee8b51025ecb19fd1e737892f38d36139526935a3f",
+  "baseline_parameters_sha256": "180579b65b189f1340a52ea4d682f3e8f70d0501ce7533bbd8b0dda3d40ad627",
+  "preexisting_edits": {
+    "README.md": "c6b4976edba959e6f550ced8e235fef711af04900f7388c44c1b4548d318a43d",
+    "benchmarks/summarize_packed_panel.py": "a2e281a11e763c7f28193cbfbde95b275a2afe5b920a08a4919588b75ff64118",
+    "docs/BENCHMARKS.md": "edb98383ff3b74641cec5def8750825fcfe8015bbb802c1129b69ac09539cb7c",
+    "docs/MODEL.md": "bdce2a15f2de707a2ecbbf5027f3bd4278856eefdc7b3aa7798d969e87924560"
+  },
+  "scaling_interface_indices": [111, 120, 6, 43],
+  "sensitive_interface_indices": [52, 100, 117, 212],
+  "stress_interface_index": 171,
+  "reference_reports": "_runtime/jax-Ka/cuda12/benchmarks/interfaces/724720",
+  "note": "Source hashes captured before implementation. Existing dense/packed panel failures are not caused by this change."
+}
