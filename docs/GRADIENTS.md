@@ -70,10 +70,16 @@ Disagreement can reflect remaining finite-solve error as well as different
 branches; the audit flags it conservatively rather than deciding which cause
 applies. Precision changes also require a fresh audit.
 
-Promotion is CPU-only and gated by `benchmarks/validate_design_preset.py` plus
-the current unit suite. Until the complete promotion report is reviewed, this
-preset remains experimental. CUDA/MPS performance and the endpoint objective
-are not promoted by CPU results.
+The preset has passed its CPU numerical promotion gates and is recommended as
+the **opt-in CPU design workflow**, with validity checks and explicit audits as
+described above. Ordinary package defaults remain unchanged. The completed
+[CPU report](../reports/design_preset_cpu.json) covers 182 unit tests, 260 forward
+interfaces, 24 gradient interfaces, five scaling cases and four sensitive-case
+regressions. It retains all convergence and audit failures: qualification does
+not mean every sequence has a usable equilibrium result. See the
+[measured outcomes and limitations](BENCHMARKS.md#adaptive-design-preset-cpu-proteinprotein-panel).
+CUDA/MPS performance and the endpoint objective are not promoted by CPU results;
+experimental calibration also remains open.
 
 The promotion runner requires the same archived protein–protein structures and
 accepted input reports as the existing benchmark suite:

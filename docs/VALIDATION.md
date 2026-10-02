@@ -46,14 +46,15 @@ equilibrium branch. New accelerator execution remains unvalidated.
 
 ## Adaptive design-preset coverage (CPU)
 
-The expanded suite passes **181 tests**, with five reference/MPS tests deselected.
+The expanded suite passes **182 tests**, with five reference/MPS tests deselected.
 The additional coverage checks the unchanged ordinary defaults, adaptive
 stopping and exact caps, consecutive-check requirements, nonfinite detection,
 independent batched stopping, JVP/VJP/finite-difference agreement, batched
 sequence gradients, direct midpoints (including unusable gradients on failed
 solves), streamed diagnostics, experimental endpoint consistency, and an
 explicit multistart audit that detects a constructed multiple-solution case.
-Promotion-report tests reject incomplete, stale or invalid measurements.
+Promotion-report tests reject incomplete, stale or invalid measurements and
+prevent audit classifications from hiding converged-trajectory parity failures.
 
 The CPU protein–protein promotion panel is separate from these unit tests and
 from the historical packed-backend panel. It uses 260 eligible interfaces for
@@ -63,6 +64,13 @@ agreement are separate outcomes. A failed audit can reflect finite-solve error
 or distinct branches; it does not identify the cause or select an equilibrium.
 See [the design preset](GRADIENTS.md#opt-in-cpu-design-preset) for the API and
 explicit-audit contract. Ordinary package defaults remain unchanged.
+
+The completed [CPU promotion report](../reports/design_preset_cpu.json) passes
+the numerical gates: 764/780 forward samples and 67/72 gradient samples qualify;
+remaining samples are explicitly classified as convergence or audit failures.
+All 135 qualifying directional checks, all five scaling cases and the four
+archived sensitive-case regressions pass. This supports the opt-in CPU preset
+with caller-controlled audits, not universal convergence or scientific calibration.
 
 ## Hardware-specific execution
 

@@ -229,6 +229,12 @@ def summarize(output):
                 bad.append(dict(action=action,case=index,reason='cache_fingerprint_mismatch'))
             rows[action].append(row)
             for record in row['records']:
+                # Audit classification must not hide a separate parity regression
+                # on the standard, converged trajectory.
+                parity_fields=('parity',) if action=='forward' else ('value_parity','gradient_parity')
+                if action!='scaling' and record.get('numerical_valid') and record.get('reference_valid'):
+                    if not all(record.get(key,False) for key in parity_fields):
+                        bad.append(dict(action=action,case=index,mixture=record['mixture'],reason='converged_parity_failure'))
                 if action=='gradient' and record.get('classification')=='passed' and record['mixture']:
                     checks=record.get('directional_checks',[])
                     if len(checks)!=3 or not all(c['passed'] for c in checks):

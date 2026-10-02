@@ -245,7 +245,7 @@ Benchmarks separate host preprocessing, compilation and synchronized warm device
 For opt-in checkpointing, fully packed local terms, implicit derivatives and
 streamed bound/free objectives, see [memory-efficient gradients](docs/GRADIENTS.md).
 Existing backend and derivative defaults are unchanged.
-`TitrationModel.for_design(cache)` additionally offers an experimental CPU design
+`TitrationModel.for_design(cache)` additionally offers a CPU-qualified design
 preset with bounded adaptive equilibrium solving and explicit branch audits;
 its promotion status is described in the same guide.
 

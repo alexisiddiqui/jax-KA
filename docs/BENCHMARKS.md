@@ -432,3 +432,88 @@ test counts, source hashes and iteration checks are in
 [gradient_memory_cpu.json](../reports/gradient_memory_cpu.json). CPU unit/gradient coverage
 is detailed in [VALIDATION.md](VALIDATION.md). CUDA/MPS memory and throughput
 for these new paths have not been measured.
+
+## Adaptive design preset: CPU protein–protein panel
+
+The opt-in `TitrationModel.for_design` preset uses packed_v2, implicit gradients
+and adaptive stopping with a 1,024-update cap. Ordinary construction remains
+dense/unrolled with exactly 64 updates. This panel is separate from the historical
+128-update results above; increasing the cap does not change the equations,
+initialization or damping.
+
+Scaling measurements use the full bound/free selectivity objective, 15 pHs from
+6.0 to 7.4, float32, and a nonsaturated softplus penalty. Each fresh CPU process
+performs one warm-up followed by five synchronized repetitions per mixture.
+
+| Residues | Compiler temporary MB | Peak process GiB | Warm seconds, 0.05 / 0.001 mixture | Maximum updates, 0.05 / 0.001 |
+| ---: | ---: | ---: | ---: | ---: |
+| 176 | 19.96 | 1.87 | 0.635 / 0.633 | 144 / 144 |
+| 289 | 39.71 | 3.19 | 1.104 / 1.108 | 144 / 144 |
+| 500 | 83.26 | 7.13 | 2.468 / 2.430 | 144 / 144 |
+| 1,254 | 273.14 | 27.50 | 6.955 / 6.543 | 144 / 144 |
+| 1,708 | 387.71 | 38.79 | 8.907 / 10.248 | 160 / 464 |
+
+All ten measured scaling evaluations have valid primal and adjoint solves and
+finite gradients. At 1,254 residues, compiler temporary storage is **62.69x lower**
+than the original packed full-objective 128-update baseline. This is not a
+62.69x reduction in process memory: geometry caches, compiler storage and other
+host allocations still dominate peak RSS. Runs used heterogeneous CPU hosts;
+timings are descriptive, not a controlled cross-host speedup claim.
+
+The former 1,708-residue nonconvergence at 128 updates is resolved by continuing
+the same trajectory under the larger cap. Its strict float64 full-objective
+gradient checks also pass for native and both soft sequences, against a fixed
+2,048-update reference and (for soft sequences) three directional finite
+differences. The native strict solve needs up to 1,008 updates. This does not
+imply that every sequence converges within 1,024 updates.
+
+The promotion protocol checks all 260 eligible protein–protein interfaces from
+the 279-entry archive; the 19 previously unsupported inputs remain explicitly
+excluded. Forward comparisons use the frozen original packed backend with a
+fixed 1,024-update schedule. The deterministic 24-interface gradient subset
+includes all five scaling cases and all four sensitive cases. Gradient checks
+use float64 with primal tolerance `1e-10` and adjoint `rtol=1e-10, atol=1e-12`,
+against packed_v2/checkpointed fixed-2,048-update derivatives. Every qualified
+soft sample also gets three directional finite differences. These stricter
+gradient checks are separate from default-float32 performance measurements.
+
+Audit failures are retained rather than treated as parity failures or silently
+resolved. For example, `9c90` (case 100) still exhausts the budget for some
+sequences, whereas `8qvc` (case 212) has converged float64 paths whose occupancies
+differ by about 0.82. A larger budget addresses insufficient iteration counts;
+it does not resolve multiple branches. Conversely, the float32 stress-case
+audit flags gaps of only `2.1–2.8e-5` for native/near-native inputs, just above
+the `2e-5` threshold; its stricter float64 audit passes. Such small discrepancies
+need not represent distinct branches. Never transfer an audit result across
+precision, sequence or geometry changes.
+
+The archived sensitive schedules were rerun against the original packed code:
+all four interfaces pass all 12 backend/schedule comparisons, with identical
+total charges and maximum occupancy difference `3.58e-7`. This regression check
+preserves the previous finite-iteration behavior; it does not clear the new
+equilibrium audit failures. The current CPU suite passes 182 tests, with five
+external-reference/MPS tests deselected.
+
+Across the completed forward panel's 780 samples (native plus two mixtures per
+interface), **764 pass**, **13 are audit-flagged**, and **three fail forward
+convergence** (all case 100). All samples pass on 252 of 260 interfaces. Every
+numerically valid comparison agrees with the original packed trajectory; no
+new forward parity or convergence regression was observed. The audit flags
+are not discarded from these counts.
+
+The completed gradient subset has **67 passing samples**, **three audit-flagged
+samples** (case 212), and **two forward failures** (case 100). All 135 directional
+finite-difference checks on qualifying soft samples pass. Both soft samples
+qualify on 22 of 24 interfaces, including every scaling case. No new converged
+value/gradient parity or adjoint regression was observed; failed primal solves
+remain unusable, not silently replaced by finite-iteration derivatives.
+
+The numerical promotion gates pass with no missing or stale-source records.
+The preset is therefore qualified for **opt-in CPU design with explicit audits**,
+not promoted to the ordinary constructor default. This is numerical validation,
+not experimental calibration or a global equilibrium certificate. The portable
+[design_preset_cpu.json](../reports/design_preset_cpu.json) records source/input
+provenance, classifications, exclusions, gradient checks and scaling results.
+Full per-pH/per-path data remain under workspace root
+`_runtime/jax-Ka/cuda12/benchmarks/design-preset/`. Historical benchmark reports
+are unchanged. Endpoint and accelerator promotion remain out of scope.
