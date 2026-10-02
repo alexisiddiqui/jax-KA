@@ -47,6 +47,8 @@ cache = prepare("tests/data/two_chains.pdb")
 cache.save("structure-cache.npz")
 # Later: cache = StructureCache.load("structure-cache.npz")
 model = TitrationModel(cache, ModelConfig(steps=64, damping=0.35))
+# Opt-in packed interaction-field contraction:
+# model = TitrationModel(cache, ModelConfig(...), backend="packed")
 
 # Construct these readouts ONCE, not in the optimization loop.
 charge_all = model.charge(ph=7.0)                    # P -> [N]
@@ -87,6 +89,12 @@ value, gradient = jax.jit(jax.value_and_grad(loss))(logits)
 # Re-check validity/convergence during optimization, not only at initialization.
 # Reject invalid steps rather than relying on a zero pKa sentinel as a loss.
 ```
+
+`backend="packed"` retains every active hypothetical identity edge and changes
+only the repeated interaction-field contraction. The dense backend remains the
+default while full-panel CPU regression and accelerator validation are pending.
+Packing is performed once when the model is constructed and is reused by charge,
+curve, grid-pKa, and direct-root readouts.
 
 `P` can be supplied directly to every readout. Use `model.validate_probabilities(P)` outside JIT to validate external probabilities. A static `allowed[N,20]` mask can be passed to `probabilities_from_logits()`. Disulfide-frozen positions are clamped to native cysteine before all calculations. A single structure can be reused across a sequence batch with `jax.vmap(charge_all)`.
 

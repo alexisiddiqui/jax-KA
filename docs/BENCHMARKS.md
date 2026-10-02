@@ -1,6 +1,8 @@
 # Executed CPU benchmarks
 
-**These are synthetic numerical graphs, not molecular structures or a PROPKA performance comparison.**
+## Initial synthetic microbenchmarks
+
+**This section uses synthetic numerical graphs, not molecular structures or a PROPKA performance comparison.** Real-structure packed-kernel results are recorded below.
 
 Environment: Python 3.13.5, JAX/JAXLIB 0.9.0.1, float32 sequence inputs, CPU only. CPU model reported by the host: AMD EPYC 9V74 80-Core Processor.
 
@@ -161,3 +163,100 @@ Use `JAX_LOG_COMPILES=1 JAX_EXPLAIN_CACHE_MISSES=1` to inspect specialization.
 When timing a sweep, measure initial bucket compilation separately and synchronize
 device results before recording execution time. The FoldBench regression runner
 reports accuracy metrics, not timings.
+
+## Experimental packed-interaction kernel: real structures (2026-10-02)
+
+The packed backend in `src/jaxpropka/model.py` packs the fixed-geometry
+`pair_mask` into active identity-to-identity edges and uses a segment reduction
+for each occupancy field update. It retains all geometrically allowed hypothetical
+identities, not just the native sequence's groups. Sequence-dependent local terms
+still use the original dense calculation. It is available through the opt-in
+`TitrationModel(..., backend="packed")`; the dense backend remains the default.
+
+### Measurement scope
+
+- CPU only, four allocated CPUs per process, float32; jobs excluded `comp1400`
+  and `comp0601`. Pilot jobs ran on `comp0650` and `comp0651`.
+- Exact unbucketed structure shapes; fixed geometry and unchanged equations,
+  damping, iteration counts, and convergence tolerance.
+- Soft probabilities are `(1-mixture)*native + mixture/20`, tested at mixtures
+  `0.05` and `0.001`. The table below reports `0.05` at **128 iterations**.
+- pH points span 6.0–7.4. Value-plus-gradient differentiates the trapezoidal
+  integral of a single complex's total charge with respect to sequence logits.
+  This is **not** the complete bound/free selectivity loss or a pKa midpoint.
+- Each operation is compiled separately; persistent compilation caching is
+  disabled. Timings synchronize via `device_get`: one first execution followed
+  by two warm executions, whose median is reported. Compilation, geometry/cache
+  preparation, and edge packing are excluded from these warm timings.
+- These are small timing pilots, not confidence intervals or GPU measurements.
+  Two pH points do not establish quadrature accuracy for the intended loss.
+
+### Warm CPU timings
+
+All values are seconds; each cell is **original dense → experimental packed**.
+
+| Operation | 8srz, 176 residues | 8jdh, 289 residues | 7zhf, 500 residues | 8r7i, 1,254 residues |
+|---|---:|---:|---:|---:|
+| 2-pH curves | 1.255 → 0.053 | 1.991 → 0.114 | 5.331 → 0.256 | 12.692 → 0.756 |
+| 2-pH value + gradient | 2.909 → 0.124 | 4.457 → 0.234 | 12.634 → 0.531 | 28.764 → 1.885 |
+| 15-pH curves | 1.406 → 0.160 | 2.194 → 0.291 | 6.125 → 0.594 | 13.943 → 1.648 |
+| 15-pH value + gradient | 4.056 → 0.804 | 6.246 → 1.595 | 17.761 → 3.924 | 42.938 → 10.677 |
+
+All table evaluations converged at the sampled pHs. For the two smaller cases,
+only 116,616/2,223,936 (5.24%) and 195,784/4,143,393 (4.73%) padded pair entries
+were active. Avoiding the inactive entries materially reduces repeated solve
+work. The speedup persists on larger structures, but large-system 15-pH reverse
+gradients remain well above one second. Cache preparation is not accelerated by
+this experiment.
+
+### Numerical parity and run status
+
+Snapshot recorded on **2026-10-02**:
+
+- Four synthetic tests passed (float32/float64, nonempty/empty interaction
+  graphs), checking output and gradient parity, frozen identities, and float64
+  directional finite differences.
+- Job **725125** completed both smaller structures. All 16 combinations of
+  structure, 128/512 iterations, 2/15 pHs, and the two soft mixtures passed the
+  real-structure parity checks. Maximum occupancy difference was `2.18e-6` and
+  maximum absolute logit-gradient difference was `1.19e-7`.
+- Job **725128_6** completed 7zhf: all eight soft-sequence comparisons passed.
+  Its 145-point native grid over pH −10 to 24 also passed parity at 128 and 512
+  iterations. The known failure was preserved: maximum native-weighted residual
+  at 512 iterations was `3.86536e-4` for both kernels, above tolerance `2e-5`.
+  Faster execution does not resolve the model's convergence difficulty.
+- Job **725128_43** completed all eight soft-sequence comparisons and both native
+  wide-grid checks. At 512 iterations and 15 pHs, its warm dense → packed times
+  were 54.16 → 4.96 seconds for curves and 169.21 → 40.14 seconds for value plus
+  gradient. Its process peaked at 103,718,112 KiB while sequentially measuring
+  both implementations; this is not a packed-only memory measurement.
+
+Real-structure parity gates use occupancy `atol=rtol=2e-5`, total-charge
+`atol=2e-4, rtol=2e-5`, logit-gradient `atol=2e-5, rtol=2e-4`, and identical
+per-pH convergence flags. The wide-native checks compare occupancies, total
+charges, and convergence flags, not gradients. Agreement with the original
+finite-iteration solver does not prove a unique equilibrium branch or molecular
+accuracy. Broader validation is required before promoting this experimental
+implementation into production.
+
+### Artifacts and reproduction
+
+Scripts: `benchmarks/profile_packed_curves.py`, the compatibility wrapper
+`benchmarks/packed_curve_kernel.py`, and `tests/test_packed_curves.py`.
+The Slurm wrapper is workspace-relative
+`_HPC/submission/jax-Ka/profile-packed-curves.sbatch` (outside the repository).
+Job 725128 was submitted with `--array=6,43 --mem=128G --time=04:00:00`;
+the extra memory accommodates the original dense reverse-mode comparison.
+
+Raw JSON under workspace root `/home/coulson/oc/lina4225`:
+
+- `_runtime/jax-Ka/cuda12/benchmarks/packed-profile/725125/case-111.json`
+- `_runtime/jax-Ka/cuda12/benchmarks/packed-profile/725125/case-120.json`
+- `_runtime/jax-Ka/cuda12/benchmarks/packed-profile/725128/case-6.json`
+- `_runtime/jax-Ka/cuda12/benchmarks/packed-profile/725128/case-43.json`
+
+Reports record source hashes, JAX version, host, shape counts, compilation and
+execution times, convergence diagnostics, and parity differences. Inputs are
+the corresponding `interfaces/724720/report-{index}.json` reports; the rebuilt
+structure cache fingerprint must match the original. The extended run enables
+`--wide-native-check`; the initial pilot did not include that option.
