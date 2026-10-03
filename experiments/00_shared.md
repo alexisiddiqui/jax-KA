@@ -141,8 +141,12 @@ One generation campaign feeds every stage:
 |---|---|---|---|
 | Smoke set | — | ~50 FoldBench protein–protein pairs | day 1 of step 1 only |
 | Set 1 | test | ~500 complexes | 01 scoring; final eval of 02/03/04 |
+| Set 2a / 2b | test (forced) | ~20–60 sites / ~10–25 systems | 01's only experimental ground truth; 03 linkage + mutation ranking |
 | Pilot | train | ~500 complexes | 02 training; satisfies 03 Part A |
 | Full | train/val | ~20k | 03 Part C |
+
+Set 2 systems and any mutant series built on them share one curation pass and one forced-test
+component list. Curating them twice is how the same literature gets read twice.
 
 ---
 
@@ -199,6 +203,22 @@ pH₀ = 7.0,  T = 298.15 K,  RT·ln10 = 1.364 kcal/mol
 
 Trapezoid rule on the shared grid. Sign check: if binding takes up protons (ΔQ > 0), binding
 must weaken as pH rises. Unit-test that before using the function.
+
+`ΔQ(pH)` is also returned unintegrated. It *is* the proton uptake on binding, so it compares
+directly against ITC buffer-mismatch Δn(H⁺) with no integration and no reference-pH choice.
+Prefer that comparison where the data exists (01 set 2b).
+
+## Ranking metrics (shared)
+
+Used by 01 set 2b and 03's mutation ranking, so they live in `score.py` too:
+
+- within-group Spearman, then aggregate across groups; **n = groups, not members**
+- sign accuracy on a signed quantity, with the near-zero band excluded and the threshold
+  recorded
+- top-k enrichment
+- observed-vs-predicted regression slope, reported alongside correlation — correlation alone
+  hides systematic compression, which is the expected failure mode for anything computed at
+  fixed conformation
 
 ---
 
@@ -261,3 +281,6 @@ over `ground_truth_1522.tar`.
 | 2026-10-03 | Noise floor (old set 3) moved to step 1b | Independent of the shared pipeline; not on the critical path |
 | 2026-10-03 | Set 1 drawn from the frozen test split; one teacher campaign feeds 01/02/03 | Avoids re-running PypKa and makes 01 numbers comparable with the final model |
 | 2026-10-03 | Buried-area cutoff read as half-sum (per side) ≥ 500 Å² | The original "BSA ≥ 500 Å²" was ambiguous between total and per-side |
+| 2026-10-03 | Set 2 split into 2a (site ΔpKa) and 2b (linkage ΔΔG(pH)); 1 person-day, curated once for both 01 and 03 | Linkage is the application claim and is a weaker, separately-testable claim than per-site ΔpKa |
+| 2026-10-03 | `ΔQ` exposed unintegrated for direct Δn(H⁺) comparison | Avoids integration error and reference-pH choice; cleanest test of the linkage path |
+| 2026-10-03 | Mutation ranking added to 03 as a first-class evaluation, with the gradient-sanity tier requiring no experimental data | Per-site RMSE does not test the design use case; the soft-sequence path is otherwise unexercised |

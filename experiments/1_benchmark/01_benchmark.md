@@ -1,7 +1,9 @@
 # 01 — Benchmark: are existing pKa models tuned for ΔpKa on binding?
 
-**Timebox:** 5 days — day 1 gates + smoke set; day 2 universe, split, prep; day 3 runs +
-set 2 curation; day 4 scoring + figures; day 5 slack
+**Timebox:** 5 days of pipeline work — day 1 gates + smoke set; day 2 universe, split, prep;
+day 3 runs; day 4 scoring + figures; day 5 slack — **plus 1 person-day of set-2 literature
+curation**, which needs no compute and can be scheduled anywhere from day 1. If that day
+cannot run in parallel, this is 6 days.
 **Hardware:** CPU node (~700 core-hours: ~1000 complexes × 3 states through the teacher;
 other methods are cheap)
 **Deliverable:** `results/benchmark/` + a standalone writeup. This is publishable on its own.
@@ -27,11 +29,16 @@ worth reporting if it occurs. It may not: methods with an explicit desolvation t
 (PROPKA3, jax-Ka) could track PB on rigid-separation ΔpKa, which is also a reportable
 result and changes what 03 claims.
 
-Two questions, kept separate throughout:
+Three questions, kept separate throughout:
 
 - **Q1 (set 1):** do fast methods reproduce the PB teacher's ΔpKa? Agreement, not accuracy.
-- **Q2 (set 2):** does anything, *including the teacher*, predict experimental ΔpKa? This is
+- **Q2 (set 2a):** does anything, *including the teacher*, predict experimental ΔpKa? This is
   the only real test of H0, and it is the ceiling for anything distilled from PypKa in 03.
+- **Q3 (set 2b):** does the linkage integral predict measured pH-dependence of affinity?
+  This is the application claim, and it is a weaker claim than Q2 — a method can get
+  individual sites wrong and still get `ΔQ = Q_AB − Q_A − Q_B` roughly right, because the
+  integral sums over sites and per-site errors partly cancel. Report Q3 on its own terms,
+  never as a corollary of Q2.
 
 ---
 
@@ -108,15 +115,57 @@ by distance shell.
 Contamination: pKAI and pKAI+ were distilled from pKPDB, which is PypKa output. Against a
 PypKa reference they measure self-consistency. Flag prominently; do not present as a win.
 
-### Set 2 — Experimental (~20–60 sites, timebox: half a day)
+### Set 2 — Experimental (the only ground truth; budget 1 person-day)
 
-Hand-curated literature ΔpKa-on-binding and pH-dependent affinity. Candidate systems:
-barnase–barstar, protease–inhibitor complexes, antibody–antigen pH switches,
-proton-linkage studies. Same prep as everything else; their split components are forced to
-test.
+Everything else in this benchmark is teacher agreement. Curation is literature work with no
+compute dependency, so it can start on day 1 and run beside the pipeline; only the prep and
+scoring of its systems wait on Part A. Their split components are forced to test.
 
-This is the only ground truth in the benchmark. Everything else is teacher agreement.
-Underpowered: report bootstrap CIs and say so.
+Two sub-sets, scored separately because they test different things.
+
+#### Set 2a — site-level ΔpKa on binding (~20–60 sites)
+
+Hand-curated literature ΔpKa-on-binding. Candidate systems: barnase–barstar,
+protease–inhibitor complexes, antibody–antigen pH switches. Tests the per-site quantity
+every method in Part B emits directly.
+
+#### Set 2b — linkage: ΔΔG_bind(pH) (target ~10–25 systems)
+
+This is the set that decides whether any of this predicts **pH-dependent binding**, which is
+the application claim. Inclusion needs, per system:
+
+- a structure of the complex that survives prep
+- affinity at **≥3 pH values** (SPR K_D or k_off series, ITC, pH-dependent competition), or
+- a **direct proton-uptake measurement** — ITC in buffers of differing ionization enthalpy
+  gives Δn(H⁺) on binding at one pH
+
+Record buffer, ionic strength, temperature and construct per entry. Mismatched ionic
+strength against the teacher's 0.1 M is a caveat, not a rejection; flag it.
+
+**Prefer direct Δn(H⁺) entries.** They compare against `ΔQ = Q_AB − Q_A − Q_B` with no
+integration, no reference-pH choice and no accumulated curve error. That is the cleanest
+single test of the whole linkage path.
+
+Metrics, all per system (n = systems, not sites):
+
+| Metric | Why |
+|---|---|
+| Sign of ΔQ at pH 7 | Does binding take up or release protons. The weakest claim, and the one most likely to hold. |
+| Δn(H⁺) vs. measured | Direct, where ITC linkage data exists |
+| Slope dΔG/dpH over the measured range | Magnitude of the pH-dependence |
+| Spearman of ΔG(pH) across measured pH points | Shape, within a system |
+
+Bootstrap over systems. At n ≈ 15 the CIs will be wide; report them and do not round a wide
+interval into a conclusion.
+
+**Expected failure mode, stated in advance.** ΔpKa here is the rigid-separation difference,
+so the predicted linkage is the protonation-linked component only. Where pH-dependence comes
+partly from conformational change — endosomal-release antibodies, histidine switches — expect
+correct sign and ordering with **underestimated magnitude**. Report observed-vs-predicted
+slope, not just correlation, so the compression is visible.
+
+**If 2b comes in under ~8 systems**, report it as case studies and drop the word "benchmark"
+for this set. Do not back a claim about predicting pH-dependent binding with 4 systems.
 
 ### Set 3 — Noise floor → step 1b
 
@@ -162,7 +211,9 @@ the quantity that justifies the whole project and 03 reuses it.
 |---|---|
 | No skill | skill 95% CI upper bound < 0.1 |
 | Tracks PB | skill 95% CI lower bound ≥ 0.5 |
-| Teacher has experimental skill | set 2 skill 95% CI lower bound > 0 |
+| Teacher has experimental site skill | set 2a skill 95% CI lower bound > 0 |
+| Linkage sign is predictable | set 2b ΔQ sign accuracy 95% CI lower bound > 0.5 |
+| Linkage magnitude is predictable | set 2b observed-vs-predicted slope CI excludes 0 **and** the regression slope is within [0.5, 2.0] |
 
 Anything between "no skill" and "tracks PB" is reported as partial skill with its CI, not
 rounded to either side.
@@ -182,7 +233,9 @@ results/benchmark/
   pairs.parquet             # if G1b passes
   representability.csv      # multi-chain, coverage, structural zeros by shell
   scores_set1.csv
-  scores_set2.csv
+  scores_set2a.csv
+  set2b_systems.csv         # one row per system: conditions, source, caveat flags
+  scores_set2b_linkage.csv  # sign, Delta n(H+), slope, within-system Spearman
   scores_set4.csv           # if run
   figures/
 ```
@@ -192,7 +245,9 @@ results/benchmark/
 - Gates G1–G5 resolved on day 1 (pass or explicit fallback)
 - Teacher valid on ≥80% of sampled set 1 complexes
 - Skill, Spearman and sign accuracy with component-bootstrap CIs for every scored method on
-  sets 1 and 2
+  sets 1 and 2a
+- Set 2b: ≥8 systems, of which ≥3 carry a direct Δn(H⁺) measurement; linkage computed for
+  every method that emits curves
 
 ## Kill criteria
 
@@ -208,7 +263,10 @@ results/benchmark/
 |---|---|
 | All methods ≈ null on set 1 | Nobody reproduces PB ΔpKa. Project justified; benchmark is the paper. |
 | Fast methods track PB on set 1 | Matching the teacher isn't the gap. 03's contribution becomes differentiability, speed and curves; rewrite its claim before generating 20k complexes. |
-| PypKa has no skill on set 2 | Distilling PypKa can't be justified on accuracy. Revisit the teacher (εᵢₙ, relaxed states) before 03's full run. |
-| PypKa skilled on set 2, fast methods not | The cleanest case for 03. |
+| PypKa has no skill on set 2a | Distilling PypKa can't be justified on accuracy. Revisit the teacher (εᵢₙ, relaxed states) before 03's full run. |
+| PypKa skilled on set 2a, fast methods not | The cleanest case for 03. |
+| Set 2b sign right, magnitude compressed | Expected. 03's claim is ordering and direction of pH-dependence, not calibrated ΔΔG(pH). Write it that way from the start. |
+| Set 2b sign no better than chance | The linkage claim does not survive at fixed conformation. Either the teacher or the rigid-separation definition is the problem — both are upstream of the model, so fix before 03's full run, not after. |
+| Set 2b works but only on non-switch systems | Say so explicitly and define the applicability domain by mechanism, not by accuracy threshold. |
 | Good absolutes (set 4), no ΔpKa skill | Failure is two-state sensitivity → paired training is the fix, not better features. |
 | PROPKA3 holds up | Its explicit desolvation/burial term transfers → borrow that functional form for the intrinsic head in 03. |

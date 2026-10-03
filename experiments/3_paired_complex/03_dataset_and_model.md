@@ -196,13 +196,63 @@ residue type.
 
 ### Evaluation
 
-Everything from 01, run identically, plus the linkage readout
-`ΔG_bind(pH) − ΔG_bind(7) = +RT·ln10·∫_7^pH [Q_complex − ΣQ_free]dpH′` (definition in
-`00_shared.md`) against experimental pH-dependent
-affinity.
+Everything from 01, run identically: sets 1, 2a and 2b (linkage) with the shared scoring
+module, component bootstrap, same pH grid.
 
 **Must beat the delta-learning CatBoost from 02.** If it doesn't, report that honestly;
 the differentiability is still a contribution but the accuracy claim isn't.
+
+### Mutation ranking — the design use case
+
+Per-site RMSE does not test what the model is for. Design asks a different question: given
+an interface, **which mutations shift its pH-dependence, and in which direction?** A model
+can be badly calibrated per site and still rank mutants correctly, and a model with good
+site-level RMSE can rank badly if its errors are correlated with the mutation. Score it
+directly.
+
+This is the one evaluation that exercises the soft-sequence path (`P[N,20]`) rather than a
+fixed structure, so it is also the integration test for that path.
+
+#### Tier 1 — pH-dependence ranking (the claim)
+
+Mutant series where affinity was measured at ≥2 pH values for ≥3 point mutants of the same
+interface. Predict `dΔG_bind/dpH` per mutant, rank within series.
+
+- within-series Spearman, then aggregate across series (n = series)
+- sign accuracy on "does this mutation increase or decrease pH-dependence"
+- top-1 / top-3 enrichment: is the strongest measured switch in the predicted top 3
+
+Honest about supply: these series are **rare**. Budget half a day of curation during 01's
+set-2 pass, since it is the same literature. **Fewer than ~8 series → report as case
+studies, not a benchmark**, matching 01's rule for set 2b.
+
+#### Tier 2 — charge-reversal subset at fixed pH (the fallback)
+
+Where tier 1 is too thin, use interface mutations of titratable residues with measured
+ΔΔG_bind at a single pH (SKEMPI is the obvious source).
+
+> **This is not a test of ΔΔG_bind.** The model predicts only the protonation-linked
+> component; SKEMPI measures the total, including packing and desolvation the model has no
+> representation for. Restrict to charge-reversal and charge-deletion mutations at the
+> interface, where the electrostatic component is expected to dominate, expect weak
+> correlation, and label the axis "protonation-linked component vs. total measured ΔΔG".
+> A null result here is close to uninformative — do not let it stand in for tier 1.
+
+#### Tier 3 — gradient sanity (cheap, do it first)
+
+No experimental data needed. On a handful of set-2b systems, take `∂(target linkage)/∂P` and
+check the top-ranked single substitutions are chemically sensible: titratable introductions
+near the interface, correct acid/base direction for the requested shift. Then discretise the
+top candidates, rescore them as hard sequences, and confirm the gradient's ranking survives
+discretisation.
+
+This catches the failure that matters most for design — a gradient that points somewhere the
+discrete model disagrees with — and it needs nothing but the trained checkpoint.
+
+**Caveat to state once, up front:** mutant side chains use one frozen candidate conformation
+in the backbone-local frame (no repacking, no rotamer search). The prediction is therefore
+for that specific placement, not a relaxed mutant. For buried positions this is a real
+limitation; 04's rotamer-averaging argument applies here and is the principled answer.
 
 ---
 
@@ -214,6 +264,8 @@ results/model/
   checkpoints/
   eval_vs_benchmark.csv
   linkage_validation.png
+  mutation_ranking.csv       # tier 1 per-series Spearman; tier 2 component correlation
+  gradient_sanity.md         # tier 3: top substitutions, discretised rescore agreement
   ablations.csv
 ```
 
@@ -222,3 +274,8 @@ results/model/
 pH-dependent titration and binding linkage **from a fixed conformation**. Not
 pH-dependent conformational change. Histidine-switch and endosomal-release cases are
 expected failure modes — say so in the paper rather than letting a reviewer find it.
+
+For mutations, the claim is **ranking and direction** of change in pH-dependence, not
+calibrated ΔΔG_bind(pH), and it is conditioned on one frozen candidate conformation per
+substitution. The model is not a binding free-energy predictor and must not be presented
+beside ΔΔG_bind methods as though it were one.
